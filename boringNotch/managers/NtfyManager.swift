@@ -8,14 +8,14 @@ final class NtfyManager: ObservableObject {
     static let shared = NtfyManager()
 
     @ObservedObject var coordinator = BoringViewCoordinator.shared
-    @Published private(set) var notifications: [NtfyNotification] = [] {
+    @Published private(set) var notifications: [NtfyNotificationModel] = [] {
         didSet {
             NtfyStateViewModel.shared.setNotifications(notifications)
             NtfyPersistenceService.shared.save(notifications)
         }
     }
     @Published private(set) var connectionStateByTopic: [String: WebSocketClient.ConnectionState] = [:]
-    @Published private(set) var latestNotification: NtfyNotification?
+    @Published private(set) var latestNotification: NtfyNotificationModel?
 
     private var clientsByTopic: [String: WebSocketClient] = [:]
     private var cancellables: Set<AnyCancellable> = []

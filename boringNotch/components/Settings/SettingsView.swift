@@ -39,6 +39,9 @@ struct SettingsView: View {
                 NavigationLink(value: "Calendar") {
                     Label("Calendar", systemImage: "calendar")
                 }
+                NavigationLink(value: "Ntfy") {
+                    Label("Ntfy", systemImage: "text.bubble.fill")
+                }
                 NavigationLink(value: "HUD") {
                     Label("HUDs", systemImage: "dial.medium.fill")
                 }
@@ -79,6 +82,8 @@ struct SettingsView: View {
                     Media()
                 case "Calendar":
                     CalendarSettings()
+                case "Ntfy":
+                    Ntfy()
                 case "HUD":
                     HUD()
                 case "Battery":
@@ -147,7 +152,7 @@ struct GeneralSettings: View {
     @Default(.automaticallySwitchDisplay) var automaticallySwitchDisplay
     @Default(.enableGestures) var enableGestures
     @Default(.openNotchOnHover) var openNotchOnHover
-    
+
 
     var body: some View {
         Form {
@@ -179,7 +184,7 @@ struct GeneralSettings: View {
                     }
                 }
                 .disabled(showOnAllDisplays)
-                
+
                 Defaults.Toggle(key: .automaticallySwitchDisplay) {
                     Text("Automatically switch displays")
                 }
@@ -470,7 +475,7 @@ struct HUD: View {
     @Default(.hudReplacement) var hudReplacement
     @ObservedObject var coordinator = BoringViewCoordinator.shared
     @State private var accessibilityAuthorized = false
-    
+
     var body: some View {
         Form {
             Section {
@@ -490,7 +495,7 @@ struct HUD: View {
                     .controlSize(.large)
                     .disabled(!accessibilityAuthorized)
                 }
-                
+
                 if !accessibilityAuthorized {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Accessibility access is required to replace the system HUD.")
@@ -507,14 +512,14 @@ struct HUD: View {
                     .padding(.top, 6)
                 }
             }
-            
+
             Section {
                 Picker("Option key behaviour", selection: $optionKeyAction) {
                     ForEach(OptionKeyAction.allCases) { opt in
                         Text(opt.rawValue).tag(opt)
                     }
                 }
-                
+
                 Picker("Progress bar style", selection: $enableGradient) {
                     Text("Hierarchical")
                         .tag(false)
@@ -531,7 +536,7 @@ struct HUD: View {
                 Text("General")
             }
             .disabled(!hudReplacement)
-            
+
             Section {
                 Defaults.Toggle(key: .showOpenNotchHUD) {
                     Text("Show HUD in open notch")
@@ -547,7 +552,7 @@ struct HUD: View {
                 }
             }
             .disabled(!hudReplacement)
-            
+
             Section {
                 Picker("HUD style", selection: $inlineHUD) {
                     Text("Default")
@@ -563,7 +568,7 @@ struct HUD: View {
                         }
                     }
                 }
-                
+
                 Defaults.Toggle(key: .showClosedNotchHUDPercentage) {
                     Text("Show percentage")
                 }
@@ -638,7 +643,7 @@ struct Media: View {
                     .font(.caption)
                 }
             }
-            
+
             Section {
                 Toggle(
                     "Show music live activity",
@@ -676,7 +681,7 @@ struct Media: View {
             } header: {
                 Text("Media playback live activity")
             }
-            
+
             Section {
                 MusicSlotConfigurationView()
                 Defaults.Toggle(key: .enableLyrics) {
@@ -832,6 +837,205 @@ func lighterColor(from nsColor: NSColor, amount: CGFloat = 0.14) -> Color {
     return Color(red: Double(nr), green: Double(ng), blue: Double(nb), opacity: Double(a))
 }
 
+struct Ntfy: View {
+    @Default(.ntfyEnabled) private var ntfyEnabled
+    @Default(.ntfyServerURL) private var ntfyServerURL
+    @Default(.ntfyTopics) private var ntfyTopics
+    @Default(.ntfyAuth) private var ntfyAuth
+    @Default(.ntfyEnableSneakPeek) private var ntfyEnableSneakPeek
+    @Default(.ntfySneakPeekStyles) private var ntfySneakPeekStyles
+    @Default(.ntfyMaxStoredNotifications) private var ntfyMaxStoredNotifications
+
+    @ObservedObject private var manager = NtfyManager.shared
+
+    @State private var newTopic: String = ""
+    @State private var authUsername: String = ""
+    @State private var authPassword: String = ""
+    @State private var authToken: String = ""
+
+    private enum AuthKind: String, CaseIterable, Identifiable {
+        case none = "None"
+        case basic = "Basic"
+        case token = "Token"
+
+        var id: String { rawValue }
+    }
+
+    private var authKindBinding: Binding<AuthKind> {
+        Binding<AuthKind>(
+            get: {
+                switch ntfyAuth {
+                case .none: return .none
+                case .basic: return .basic
+                case .token: return .token
+                }
+            },
+            set: { newKind in
+                switch newKind {
+                case .none:
+                    ntfyAuth = .none
+                case .basic:
+                    ntfyAuth = .basic(username: authUsername, password: authPassword)
+                case .token:
+                    ntfyAuth = .token(authToken)
+                }
+            }
+        )
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                HStack {
+                    Text("Enable ntfy")
+                    Spacer()
+                    TextField("", text: $ntfyServerURL, prompt: Text(Defaults.Keys.ntfyServerURL.defaultValue))
+                        .textFieldStyle(.roundedBorder)
+                        .labelsHidden()
+                        .disabled(!ntfyEnabled)
+                    Toggle("", isOn: $ntfyEnabled)
+                        .labelsHidden()
+                }
+                Toggle("Show sneak peak on new notifications", isOn: $ntfyEnableSneakPeek)
+                    .disabled(!ntfyEnabled)
+                Picker("Sneak Peek Style", selection: $ntfySneakPeekStyles) {
+                    ForEach(SneakPeekStyle.allCases) { style in
+                        Text(style.rawValue).tag(style)
+                    }
+                }
+                .disabled(!ntfyEnableSneakPeek)
+                Stepper(value: $ntfyMaxStoredNotifications, in: 10...500, step: 10) {
+                    HStack {
+                        Text("Max stored notifications")
+                        Spacer()
+                        Text("\(ntfyMaxStoredNotifications)")
+                    }
+                }
+                .disabled(!ntfyEnabled)
+            } header: {
+                Text("General")
+            }
+
+            Section {
+                Picker("Auth", selection: authKindBinding) {
+                    ForEach(AuthKind.allCases) { kind in
+                        Text(kind.rawValue).tag(kind)
+                    }
+                }
+
+                switch authKindBinding.wrappedValue {
+                case .none:
+                    EmptyView()
+                case .basic:
+                    TextField("Username", text: $authUsername)
+                        .textFieldStyle(.roundedBorder)
+                        .onChange(of: authUsername) { _, _ in
+                            ntfyAuth = .basic(username: authUsername, password: authPassword)
+                        }
+                    SecureField("Password", text: $authPassword)
+                        .textFieldStyle(.roundedBorder)
+                        .onChange(of: authPassword) { _, _ in
+                            ntfyAuth = .basic(username: authUsername, password: authPassword)
+                        }
+                case .token:
+                    SecureField("Token", text: $authToken)
+                        .textFieldStyle(.roundedBorder)
+                        .onChange(of: authToken) { _, _ in
+                            ntfyAuth = .token(authToken)
+                        }
+                }
+            } header: {
+                Text("Authentication")
+            }
+            .disabled(!ntfyEnabled)
+
+            Section {
+                if !ntfyTopics.isEmpty {
+                    List {
+                        ForEach(ntfyTopics, id: \.self) { topic in
+                            HStack {
+                                Text(topic)
+                                Spacer(minLength: 0)
+                                if let state = manager.connectionStateByTopic[topic] {
+                                    Text(connectionLabel(state))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(2)
+                                }
+                                HStack {
+                                    Button {
+                                        manager.reconnectTopic(topic)
+                                    } label: {
+                                        Image(systemName: "arrow.clockwise")
+                                            .imageScale(.small)
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .disabled(!ntfyEnabled)
+                                    Button {
+                                        ntfyTopics.removeAll { $0 == topic }
+                                    } label: {
+                                        Image(systemName: "trash")
+                                            .imageScale(.small)
+                                    }
+                                    .buttonStyle(.borderless)
+                                }
+                            }
+                            .padding(.vertical, 8)
+                        }
+                    }
+                }
+                HStack {
+                    TextField("", text: $newTopic)
+                        .textFieldStyle(.roundedBorder)
+                        .labelsHidden()
+                    Button("Add") {
+                        let t = newTopic.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !t.isEmpty else { return }
+                        if !ntfyTopics.contains(t) {
+                            ntfyTopics.append(t)
+                        }
+                        newTopic = ""
+                    }
+                    .disabled(newTopic.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            } header: {
+                Text("Topics")
+            }
+        }
+        .navigationTitle("Ntfy")
+        .onAppear {
+            hydrateAuthInputsFromDefaults()
+            _ = manager // ensure initialized
+        }
+    }
+
+    private func hydrateAuthInputsFromDefaults() {
+        switch ntfyAuth {
+        case .none:
+            authUsername = ""
+            authPassword = ""
+            authToken = ""
+        case let .basic(username, password):
+            authUsername = username
+            authPassword = password
+            authToken = ""
+        case let .token(t):
+            authToken = t
+            authUsername = ""
+            authPassword = ""
+        }
+    }
+
+    private func connectionLabel(_ state: WebSocketClient.ConnectionState) -> String {
+        switch state {
+        case .disconnected: return "Disconnected"
+        case .connecting: return "Connecting…"
+        case .connected: return "Connected"
+        case let .failed(msg): return "Failed: \(msg)"
+        }
+    }
+}
+
 struct About: View {
     @State private var showBuildNumber: Bool = false
     let updaterController: SPUStandardUpdaterController
@@ -910,7 +1114,7 @@ struct About: View {
 }
 
 struct Shelf: View {
-    
+
     @Default(.shelfTapToOpen) var shelfTapToOpen: Bool
     @Default(.quickShareProvider) var quickShareProvider
     @Default(.expandedDragDetection) var expandedDragDetection: Bool
@@ -919,11 +1123,11 @@ struct Shelf: View {
     private var selectedProvider: QuickShareProvider? {
         quickShareService.availableProviders.first(where: { $0.id == quickShareProvider })
     }
-    
+
     init() {
         Task { await QuickShareService.shared.discoverAvailableProviders() }
     }
-    
+
     var body: some View {
         Form {
             Section {
@@ -954,7 +1158,7 @@ struct Shelf: View {
                     Text("General")
                 }
             }
-            
+
             Section {
                 Picker("Quick Share Service", selection: $quickShareProvider) {
                     ForEach(quickShareService.availableProviders, id: \.id) { provider in
@@ -976,7 +1180,7 @@ struct Shelf: View {
                     }
                 }
                 .pickerStyle(.menu)
-                
+
                 if let selectedProvider = selectedProvider {
                     HStack {
                         Group {
@@ -1002,7 +1206,7 @@ struct Shelf: View {
                     .padding(.vertical, 4)
                 }
                 // Providers are always enabled; user can pick default service above.
-                
+
             } header: {
                 HStack {
                     Text("Quick Share")
@@ -1415,12 +1619,12 @@ struct Advanced: View {
     @Default(.extendHoverArea) var extendHoverArea
     @Default(.showOnLockScreen) var showOnLockScreen
     @Default(.hideFromScreenRecording) var hideFromScreenRecording
-    
+
     @State private var customAccentColor: Color = .accentColor
     @State private var selectedPresetColor: PresetAccentColor? = nil
     let icons: [String] = ["logo2"]
     @State private var selectedIcon: String = "logo2"
-    
+
     // macOS accent colors
     enum PresetAccentColor: String, CaseIterable, Identifiable {
         case blue = "Blue"
@@ -1431,9 +1635,9 @@ struct Advanced: View {
         case yellow = "Yellow"
         case green = "Green"
         case graphite = "Graphite"
-        
+
         var id: String { self.rawValue }
-        
+
         var color: Color {
             switch self {
             case .blue: return Color(red: 0.0, green: 0.478, blue: 1.0)
@@ -1447,7 +1651,7 @@ struct Advanced: View {
             }
         }
     }
-    
+
     var body: some View {
         Form {
             Section {
@@ -1458,7 +1662,7 @@ struct Advanced: View {
                         Text("Custom").tag(true)
                     }
                     .pickerStyle(.segmented)
-                    
+
                     if !useCustomAccentColor {
                         // System accent info
                         VStack(alignment: .leading, spacing: 8) {
@@ -1468,7 +1672,7 @@ struct Advanced: View {
                                     color: .accentColor,
                                     isSystemDefault: true
                                 ) {}
-                                
+
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("Using System Accent")
                                         .font(.body)
@@ -1486,7 +1690,7 @@ struct Advanced: View {
                                 .font(.caption)
                                 .fontWeight(.semibold)
                                 .foregroundStyle(.secondary)
-                            
+
                             HStack(spacing: 12) {
                                 ForEach(PresetAccentColor.allCases) { preset in
                                     AccentCircleButton(
@@ -1502,10 +1706,10 @@ struct Advanced: View {
                                 }
                                 Spacer()
                             }
-                            
+
                             Divider()
                                 .padding(.vertical, 4)
-                            
+
                             // Custom color picker
                             HStack(spacing: 12) {
                                 VStack(alignment: .leading, spacing: 2) {
@@ -1515,9 +1719,9 @@ struct Advanced: View {
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
-                                
+
                                 Spacer()
-                                
+
                                 ColorPicker(selection: Binding(
                                     get: { customAccentColor },
                                     set: { newColor in
@@ -1531,7 +1735,7 @@ struct Advanced: View {
                                         Circle()
                                             .fill(customAccentColor)
                                             .frame(width: 32, height: 32)
-                                        
+
                                         if selectedPresetColor == nil {
                                             Circle()
                                                 .strokeBorder(.primary.opacity(0.3), lineWidth: 2)
@@ -1556,7 +1760,7 @@ struct Advanced: View {
             .onAppear {
                 initializeAccentColorState()
             }
-            
+
             Section {
                 Defaults.Toggle(key: .enableShadow) {
                     Text("Enable window shadow")
@@ -1567,7 +1771,7 @@ struct Advanced: View {
             } header: {
                 Text("Window Appearance")
             }
-            
+
             Section {
                 HStack {
                     ForEach(icons, id: \.self) { icon in
@@ -1611,7 +1815,7 @@ struct Advanced: View {
                     customBadge(text: "Coming soon")
                 }
             }
-            
+
             Section {
                 Defaults.Toggle(key: .extendHoverArea) {
                     Text("Extend hover area")
@@ -1635,14 +1839,14 @@ struct Advanced: View {
             loadCustomColor()
         }
     }
-    
+
     private func forceUiUpdate() {
         // Force refresh the UI
         DispatchQueue.main.async {
             NotificationCenter.default.post(name: Notification.Name("AccentColorChanged"), object: nil)
         }
     }
-    
+
     private func saveCustomColor(_ color: Color) {
         let nsColor = NSColor(color)
         if let colorData = try? NSKeyedArchiver.archivedData(withRootObject: nsColor, requiringSecureCoding: false) {
@@ -1650,12 +1854,12 @@ struct Advanced: View {
             forceUiUpdate()
         }
     }
-    
+
     private func loadCustomColor() {
         if let colorData = Defaults[.customAccentColorData],
            let nsColor = try? NSKeyedUnarchiver.unarchivedObject(ofClass: NSColor.self, from: colorData) {
             customAccentColor = Color(nsColor: nsColor)
-            
+
             // Check if loaded color matches a preset
             selectedPresetColor = nil
             for preset in PresetAccentColor.allCases {
@@ -1666,16 +1870,16 @@ struct Advanced: View {
             }
         }
     }
-    
+
     private func colorsAreEqual(_ color1: Color, _ color2: Color) -> Bool {
         let nsColor1 = NSColor(color1).usingColorSpace(.sRGB) ?? NSColor(color1)
         let nsColor2 = NSColor(color2).usingColorSpace(.sRGB) ?? NSColor(color2)
-        
+
         return abs(nsColor1.redComponent - nsColor2.redComponent) < 0.01 &&
                abs(nsColor1.greenComponent - nsColor2.greenComponent) < 0.01 &&
                abs(nsColor1.blueComponent - nsColor2.blueComponent) < 0.01
     }
-    
+
     private func initializeAccentColorState() {
         if !useCustomAccentColor {
             selectedPresetColor = nil // Multicolor is selected when useCustomAccentColor is false
@@ -1692,7 +1896,7 @@ struct AccentCircleButton: View {
     var isSystemDefault: Bool = false
     var isMulticolor: Bool = false
     let action: () -> Void
-    
+
     var body: some View {
         Button(action: action) {
             ZStack {
@@ -1700,12 +1904,12 @@ struct AccentCircleButton: View {
                 Circle()
                     .fill(color)
                     .frame(width: 32, height: 32)
-                
+
                 // Subtle border
                 Circle()
                     .strokeBorder(Color.primary.opacity(0.15), lineWidth: 1)
                     .frame(width: 32, height: 32)
-                
+
                 // Apple-style highlight ring around the middle when selected
                 if isSelected {
                     Circle()

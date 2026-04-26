@@ -70,6 +70,14 @@ enum OptionKeyAction: String, CaseIterable, Identifiable, Defaults.Serializable 
 
 // MARK: - ntfy
 
+enum AuthOption: String, CaseIterable, Identifiable {
+    case none = "None"
+    case basic = "Basic"
+    case token = "Token"
+
+    var id: String { rawValue }
+}
+
 enum NtfyAuthConfig: Codable, Defaults.Serializable, Equatable {
     case none
     case basic(username: String, password: String)

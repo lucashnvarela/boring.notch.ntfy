@@ -853,16 +853,8 @@ struct Ntfy: View {
     @State private var authPassword: String = ""
     @State private var authToken: String = ""
 
-    private enum AuthKind: String, CaseIterable, Identifiable {
-        case none = "None"
-        case basic = "Basic"
-        case token = "Token"
-
-        var id: String { rawValue }
-    }
-
-    private var authKindBinding: Binding<AuthKind> {
-        Binding<AuthKind>(
+    private var authKindBinding: Binding<AuthOption> {
+        Binding<AuthOption>(
             get: {
                 switch ntfyAuth {
                 case .none: return .none

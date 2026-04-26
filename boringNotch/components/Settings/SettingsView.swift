@@ -840,18 +840,16 @@ func lighterColor(from nsColor: NSColor, amount: CGFloat = 0.14) -> Color {
 struct Ntfy: View {
     @Default(.ntfyEnabled) private var ntfyEnabled
     @Default(.ntfyServerURL) private var ntfyServerURL
-    @Default(.ntfyTopics) private var ntfyTopics
-    @Default(.ntfyAuth) private var ntfyAuth
     @Default(.ntfyEnableSneakPeek) private var ntfyEnableSneakPeek
-    @Default(.ntfySneakPeekStyles) private var ntfySneakPeekStyles
-    @Default(.ntfyMaxStoredNotifications) private var ntfyMaxStoredNotifications
+    @Default(.ntfyAuth) private var ntfyAuth
+    @Default(.ntfyTopics) private var ntfyTopics
 
     @ObservedObject private var manager = NtfyManager.shared
 
-    @State private var newTopic: String = ""
     @State private var authUsername: String = ""
     @State private var authPassword: String = ""
     @State private var authToken: String = ""
+    @State private var newTopic: String = ""
 
     private var authKindBinding: Binding<AuthOption> {
         Binding<AuthOption>(
@@ -884,33 +882,18 @@ struct Ntfy: View {
                     TextField("", text: $ntfyServerURL, prompt: Text(Defaults.Keys.ntfyServerURL.defaultValue))
                         .textFieldStyle(.roundedBorder)
                         .labelsHidden()
-                        .disabled(!ntfyEnabled)
+                        .frame(width: 220)
                     Toggle("", isOn: $ntfyEnabled)
                         .labelsHidden()
                 }
                 Toggle("Show sneak peak on new notifications", isOn: $ntfyEnableSneakPeek)
-                    .disabled(!ntfyEnabled)
-                Picker("Sneak Peek Style", selection: $ntfySneakPeekStyles) {
-                    ForEach(SneakPeekStyle.allCases) { style in
-                        Text(style.rawValue).tag(style)
-                    }
-                }
-                .disabled(!ntfyEnableSneakPeek)
-                Stepper(value: $ntfyMaxStoredNotifications, in: 10...500, step: 10) {
-                    HStack {
-                        Text("Max stored notifications")
-                        Spacer()
-                        Text("\(ntfyMaxStoredNotifications)")
-                    }
-                }
-                .disabled(!ntfyEnabled)
             } header: {
                 Text("General")
             }
 
             Section {
                 Picker("Auth", selection: authKindBinding) {
-                    ForEach(AuthKind.allCases) { kind in
+                    ForEach(AuthOption.allCases) { kind in
                         Text(kind.rawValue).tag(kind)
                     }
                 }
@@ -919,27 +902,44 @@ struct Ntfy: View {
                 case .none:
                     EmptyView()
                 case .basic:
-                    TextField("Username", text: $authUsername)
-                        .textFieldStyle(.roundedBorder)
-                        .onChange(of: authUsername) { _, _ in
-                            ntfyAuth = .basic(username: authUsername, password: authPassword)
-                        }
-                    SecureField("Password", text: $authPassword)
-                        .textFieldStyle(.roundedBorder)
-                        .onChange(of: authPassword) { _, _ in
-                            ntfyAuth = .basic(username: authUsername, password: authPassword)
-                        }
+                    HStack {
+                        Text("Username")
+                        Spacer()
+                        TextField("", text: $authUsername)
+                            .textFieldStyle(.roundedBorder)
+                            .labelsHidden()
+                            .frame(width: 140)
+                            .onChange(of: authUsername) { _, _ in
+                                ntfyAuth = .basic(username: authUsername, password: authPassword)
+                            }
+                    }
+                    HStack {
+                        Text("Password")
+                        Spacer()
+                        SecureField("", text: $authPassword)
+                            .textFieldStyle(.roundedBorder)
+                            .labelsHidden()
+                            .frame(width: 140)
+                            .onChange(of: authPassword) { _, _ in
+                                ntfyAuth = .basic(username: authUsername, password: authPassword)
+                            }
+                    }
                 case .token:
-                    SecureField("Token", text: $authToken)
-                        .textFieldStyle(.roundedBorder)
-                        .onChange(of: authToken) { _, _ in
-                            ntfyAuth = .token(authToken)
-                        }
+                    HStack {
+                        Text("Token")
+                        Spacer()
+                        SecureField("", text: $authToken)
+                            .textFieldStyle(.roundedBorder)
+                            .labelsHidden()
+                            .frame(width: 200)
+                            .onChange(of: authToken) { _, _ in
+                                ntfyAuth = .token(authToken)
+                            }
+                    }
                 }
             } header: {
                 Text("Authentication")
             }
-            .disabled(!ntfyEnabled)
 
             Section {
                 if !ntfyTopics.isEmpty {
@@ -947,57 +947,50 @@ struct Ntfy: View {
                         ForEach(ntfyTopics, id: \.self) { topic in
                             HStack {
                                 Text(topic)
-                                Spacer(minLength: 0)
-                                if let state = manager.connectionStateByTopic[topic] {
-                                    Text(connectionLabel(state))
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(2)
-                                }
-                                HStack {
-                                    Button {
-                                        manager.reconnectTopic(topic)
-                                    } label: {
-                                        Image(systemName: "arrow.clockwise")
-                                            .imageScale(.small)
-                                    }
-                                    .buttonStyle(.borderless)
-                                    .disabled(!ntfyEnabled)
-                                    Button {
-                                        ntfyTopics.removeAll { $0 == topic }
-                                    } label: {
-                                        Image(systemName: "trash")
-                                            .imageScale(.small)
-                                    }
-                                    .buttonStyle(.borderless)
-                                }
+                                Spacer()
+                                let (icon, color) = connectionColor(manager.connectionStateByTopic[topic])
+                                Image(systemName: icon)
+                                    .imageScale(.small)
+                                    .foregroundColor(color)
+                                    .padding(.horizontal, 4)
+
                             }
                             .padding(.vertical, 8)
+                        }
+                        .onDelete { indexSet in
+                            ntfyTopics.remove(atOffsets: indexSet)
                         }
                     }
                 }
                 HStack {
+                    Spacer()
                     TextField("", text: $newTopic)
                         .textFieldStyle(.roundedBorder)
                         .labelsHidden()
-                    Button("Add") {
-                        let t = newTopic.trimmingCharacters(in: .whitespacesAndNewlines)
-                        guard !t.isEmpty else { return }
-                        if !ntfyTopics.contains(t) {
-                            ntfyTopics.append(t)
-                        }
+                        .frame(width: 120)
+                    Button("Subscribe") {
+                        manager.addTopic(newTopic)
                         newTopic = ""
                     }
-                    .disabled(newTopic.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(
+                        newTopic.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                        ntfyTopics.contains(newTopic.trimmingCharacters(in: .whitespacesAndNewlines))
+                    )
                 }
             } header: {
                 Text("Topics")
+            } footer: {
+                Button("Reconnect") {
+                    manager.reconnectAll()
+                }
+                .buttonStyle(.plain)
+                .disabled(!ntfyEnabled || ntfyTopics.isEmpty)
             }
         }
         .navigationTitle("Ntfy")
         .onAppear {
-            hydrateAuthInputsFromDefaults()
-            _ = manager // ensure initialized
+           hydrateAuthInputsFromDefaults()
+            _ = manager
         }
     }
 
@@ -1018,12 +1011,12 @@ struct Ntfy: View {
         }
     }
 
-    private func connectionLabel(_ state: WebSocketClient.ConnectionState) -> String {
+    private func connectionColor(_ state: WebSocketClient.ConnectionState?) -> (icon: String, color: Color) {
         switch state {
-        case .disconnected: return "Disconnected"
-        case .connecting: return "Connecting…"
-        case .connected: return "Connected"
-        case let .failed(msg): return "Failed: \(msg)"
+        case .connecting:    return ("wifi", .yellow)
+        case .connected:     return ("wifi", .green)
+        case .failed:        return ("wifi.exclamationmark", .red)
+        default:             return ("wifi.slash", .gray)
         }
     }
 }

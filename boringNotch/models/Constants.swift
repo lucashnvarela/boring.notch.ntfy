@@ -252,12 +252,10 @@ extension Defaults.Keys {
     // MARK: ntfy
     static let ntfyEnabled = Key<Bool>("ntfyEnabled", default: false)
     static let ntfyServerURL = Key<String>("ntfyServerURL", default: "https://ntfy.sh")
-    static let ntfyTopics = Key<[String]>("ntfyTopics", default: [])
-    static let ntfyAuth = Key<NtfyAuthConfig>("ntfyAuth", default: .none)
     static let ntfyEnableSneakPeek = Key<Bool>("ntfyEnableSneakPeek", default: false)
-    static let ntfySneakPeekStyles = Key<SneakPeekStyle>("ntfySneakPeekStyles", default: .standard)
-    static let ntfyMaxStoredNotifications = Key<Int>("ntfyMaxStoredNotifications", default: 50)
-    
+    static let ntfyAuth = Key<NtfyAuthConfig>("ntfyAuth", default: .none)
+    static let ntfyTopics = Key<[String]>("ntfyTopics", default: [])
+
     // Helper to determine the default media controller based on NowPlaying deprecation status
     static var defaultMediaController: MediaControllerType {
         if MusicManager.shared.isNowPlayingDeprecated {

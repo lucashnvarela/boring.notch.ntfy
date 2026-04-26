@@ -1,3 +1,10 @@
+//
+//  WebSocketClient.swift
+//  boringNotch
+//
+//  Created by Lucas Varela on 26/04/2026.
+//
+
 import Combine
 import Foundation
 

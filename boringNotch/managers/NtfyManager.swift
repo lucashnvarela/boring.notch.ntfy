@@ -11,7 +11,6 @@ final class NtfyManager: ObservableObject {
     @Published private(set) var notifications: [NtfyNotificationModel] = [] {
         didSet {
             NtfyStateViewModel.shared.setNotifications(notifications)
-            NtfyPersistenceService.shared.save(notifications)
         }
     }
     @Published private(set) var connectionStateByTopic: [String: WebSocketClient.ConnectionState] = [:]
@@ -21,65 +20,39 @@ final class NtfyManager: ObservableObject {
     private var cancellables: Set<AnyCancellable> = []
 
     private init() {
-        let loaded = NtfyPersistenceService.shared.load()
-        _notifications = Published(initialValue: loaded)
-        NtfyStateViewModel.shared.setNotifications(loaded)
         bindDefaults()
-        applyCurrentConfiguration()
+        reconnectAll()
     }
 
     private func bindDefaults() {
-        let keys: [AnyPublisher<Void, Never>] = [
-            Defaults.publisher(.ntfyEnabled).map { _ in () }.eraseToAnyPublisher(),
-            Defaults.publisher(.ntfyServerURL).map { _ in () }.eraseToAnyPublisher(),
-            Defaults.publisher(.ntfyTopics).map { _ in () }.eraseToAnyPublisher(),
-            Defaults.publisher(.ntfyAuth).map { _ in () }.eraseToAnyPublisher(),
-            Defaults.publisher(.enableSneakPeek).map { _ in () }.eraseToAnyPublisher(),
-            Defaults.publisher(.ntfyMaxStoredNotifications).map { _ in () }.eraseToAnyPublisher(),
-        ]
-
-        Publishers.MergeMany(keys)
+        Defaults.publisher(.ntfyEnabled)
             .debounce(for: .milliseconds(150), scheduler: DispatchQueue.main)
-            .sink { [weak self] in
-                guard let self else { return }
-                self.applyCurrentConfiguration()
+            .sink { [weak self] _ in self?.reconnectAll() }
+            .store(in: &cancellables)
+
+        Defaults.publisher(.ntfyTopics)
+            .sink { [weak self] _ in
+                guard let topic = Defaults[.ntfyTopics].last else { return }
+                self?.startTopic(topic)
             }
             .store(in: &cancellables)
     }
 
-    private func applyCurrentConfiguration() {
-        guard Defaults[.ntfyEnabled] else {
-            stopAll()
-            return
-        }
-
-        let topics = Defaults[.ntfyTopics].filter { !$0.isEmpty }
-
-        let desired = Set(topics)
-        let existing = Set(clientsByTopic.keys)
-
-        let toRemove = existing.subtracting(desired)
-        let toAdd = desired.subtracting(existing)
-
-        for topic in toRemove {
-            clientsByTopic[topic]?.disconnect()
-            clientsByTopic[topic] = nil
-            connectionStateByTopic[topic] = nil
-        }
-
-        for topic in toAdd {
-            startTopic(topic)
-        }
-
-        for topic in desired {
-            reconnectTopic(topic)
-        }
-
-        trimIfNeeded()
+    func addTopic(_ topic: String) {
+        let t = topic.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty, !Defaults[.ntfyTopics].contains(t) else { return }
+        Defaults[.ntfyTopics].append(t)
     }
 
-    func clearNotifications() {
-        notifications = []
+    func reconnectAll() {
+        stopAll()
+        guard Defaults[.ntfyEnabled] else {
+            return
+        }
+        let topics = Defaults[.ntfyTopics].filter { !$0.isEmpty }
+        for topic in topics {
+            startTopic(topic)
+        }
     }
 
     private func stopAll() {
@@ -88,12 +61,6 @@ final class NtfyManager: ObservableObject {
         }
         clientsByTopic.removeAll()
         connectionStateByTopic.removeAll()
-    }
-
-    func reconnectTopic(_ topic: String) {
-        clientsByTopic[topic]?.disconnect()
-        clientsByTopic[topic] = nil
-        startTopic(topic)
     }
 
     private func startTopic(_ topic: String) {
@@ -132,22 +99,9 @@ final class NtfyManager: ObservableObject {
 
         notifications.insert(notification, at: 0)
         latestNotification = notification
-        trimIfNeeded()
 
         if Defaults[.ntfyEnableSneakPeek] {
-            if Defaults[.ntfySneakPeekStyles] == .standard {
-                coordinator.toggleSneakPeek(status: true, type: .ntfy)
-            } else {
-                coordinator.toggleExpandingView(status: true, type: .ntfy)
-            }
-        }
-    }
-
-    private func trimIfNeeded() {
-        let maxCount = max(0, Defaults[.ntfyMaxStoredNotifications])
-        guard maxCount > 0 else { return }
-        if notifications.count > maxCount {
-            notifications = Array(notifications.prefix(maxCount))
+            coordinator.toggleSneakPeek(status: true, type: .ntfy, duration: 3)
         }
     }
 

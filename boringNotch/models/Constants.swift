@@ -68,9 +68,7 @@ enum OptionKeyAction: String, CaseIterable, Identifiable, Defaults.Serializable 
     var id: String { self.rawValue }
 }
 
-// MARK: - ntfy
-
-enum AuthOption: String, CaseIterable, Identifiable {
+enum NtfyAuthMethod: String, CaseIterable, Identifiable {
     case none = "None"
     case basic = "Basic"
     case token = "Token"
@@ -78,54 +76,10 @@ enum AuthOption: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-enum NtfyAuthConfig: Codable, Defaults.Serializable, Equatable {
+enum NtfyAuthConfig: Codable, Equatable, Defaults.Serializable {
     case none
     case basic(username: String, password: String)
     case token(String)
-
-    private enum CodingKeys: String, CodingKey {
-        case kind
-        case username
-        case password
-        case token
-    }
-
-    private enum Kind: String, Codable {
-        case none
-        case basic
-        case token
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let kind = try container.decode(Kind.self, forKey: .kind)
-        switch kind {
-        case .none:
-            self = .none
-        case .basic:
-            self = .basic(
-                username: try container.decode(String.self, forKey: .username),
-                password: try container.decode(String.self, forKey: .password)
-            )
-        case .token:
-            self = .token(try container.decode(String.self, forKey: .token))
-        }
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        switch self {
-        case .none:
-            try container.encode(Kind.none, forKey: .kind)
-        case let .basic(username, password):
-            try container.encode(Kind.basic, forKey: .kind)
-            try container.encode(username, forKey: .username)
-            try container.encode(password, forKey: .password)
-        case let .token(token):
-            try container.encode(Kind.token, forKey: .kind)
-            try container.encode(token, forKey: .token)
-        }
-    }
 }
 
 extension Defaults.Keys {
@@ -198,6 +152,12 @@ extension Defaults.Keys {
         default: MusicControlButton.defaultLayout.count
     )
     
+    // MARK: ntfy
+    static let boringNtfy = Key<Bool>("boringNtfy", default: false)
+    static let ntfyServerURL = Key<String>("ntfyServerURL", default: "")
+    static let ntfyEnableSneakPeek = Key<Bool>("ntfyEnableSneakPeek", default: false)
+    static let ntfyAuthentication = Key<NtfyAuthConfig>("ntfyAuthentication", default: .none)
+
     // MARK: Battery
     static let showPowerStatusNotifications = Key<Bool>("showPowerStatusNotifications", default: true)
     static let showBatteryIndicator = Key<Bool>("showBatteryIndicator", default: true)
@@ -248,13 +208,6 @@ extension Defaults.Keys {
     static let customAccentColorData = Key<Data?>("customAccentColorData", default: nil)
     // Show or hide the title bar
     static let hideTitleBar = Key<Bool>("hideTitleBar", default: true)
-
-    // MARK: ntfy
-    static let ntfyEnabled = Key<Bool>("ntfyEnabled", default: false)
-    static let ntfyServerURL = Key<String>("ntfyServerURL", default: "https://ntfy.sh")
-    static let ntfyEnableSneakPeek = Key<Bool>("ntfyEnableSneakPeek", default: false)
-    static let ntfyAuth = Key<NtfyAuthConfig>("ntfyAuth", default: .none)
-    static let ntfyTopics = Key<[String]>("ntfyTopics", default: [])
 
     // Helper to determine the default media controller based on NowPlaying deprecation status
     static var defaultMediaController: MediaControllerType {

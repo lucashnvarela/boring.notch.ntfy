@@ -117,36 +117,81 @@ final class NtfyManager: ObservableObject {
         case .none:
             return [:]
         case let .basic(username, password):
-            let creds = "\(username):\(password)"
-            let b64 = Data(creds.utf8).base64EncodedString()
+            let b64 = Data("\(username):\(password)".utf8).base64EncodedString()
             return ["Authorization": "Basic \(b64)"]
         case let .token(token):
             return ["Authorization": "Bearer \(token)"]
         }
     }
 
-    private func makeWebSocketURL(serverURLString: String, topic: String) -> URL? {
-        guard var components = URLComponents(string: serverURLString.trimmingCharacters(in: .whitespacesAndNewlines)) else {
-            return nil
-        }
+    private func makeLoadSubscriptionsRequest() -> URLRequest? {
+        guard var components = URLComponents(string: Defaults[.ntfyServerURL]) else { return nil }
+        if components.scheme != "http" { components.scheme = "https" }
+        components.path = "/v1/account"
 
-        switch components.scheme?.lowercased() {
-        case "https":
-            components.scheme = "wss"
-        case "http":
-            components.scheme = "ws"
-        case "ws", "wss":
+        guard let url = components.url else { return nil }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+
+        switch Defaults[.ntfyAuthentication] {
+        case .none:
             break
         default:
-            if components.scheme == nil {
-                components.scheme = "wss"
+            makeAuthHeaders(auth: Defaults[.ntfyAuthentication]).forEach {
+                request.setValue($1, forHTTPHeaderField: $0)
             }
         }
 
-        let basePath = (components.path as NSString).standardizingPath
-        let normalizedBase = basePath == "/" ? "" : basePath
-        let fullPath = "\(normalizedBase)/\(topic)/ws"
-        components.path = fullPath
-        return components.url
+        return request
+    }
+
+    private func makeSyncMessagesRequest(for topic: String, since: String) -> URLRequest? {
+        guard var components = URLComponents(string: Defaults[.ntfyServerURL]) else { return nil }
+        if components.scheme != "http" { components.scheme = "https" }
+        components.path = "/\(topic)/json"
+        components.queryItems = [
+            URLQueryItem(name: "poll", value: "1"),
+            URLQueryItem(name: "since", value: since)
+        ]
+
+        guard let url = components.url else { return nil }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+
+        switch Defaults[.ntfyAuthentication] {
+        case .none:
+            break
+        default:
+            makeAuthHeaders(auth: Defaults[.ntfyAuthentication]).forEach {
+                request.setValue($1, forHTTPHeaderField: $0)
+            }
+        }
+
+        return request
+    }
+
+    private func makeWebSocketRequest(for topic: String) -> URLRequest? {
+        guard var components = URLComponents(string: Defaults[.ntfyServerURL]) else { return nil }
+        switch components.scheme {
+        case "https": components.scheme = "wss"
+        case "http":  components.scheme = "ws"
+        case "ws", "wss": break
+        default:      components.scheme = "wss"
+        }
+        components.path = "/\(topic)/ws"
+
+        guard let url = components.url else { return nil }
+        var request = URLRequest(url: url)
+
+        switch Defaults[.ntfyAuthentication] {
+        case .none:
+            break
+        default:
+            makeAuthHeaders(auth: Defaults[.ntfyAuthentication]).forEach {
+                request.setValue($1, forHTTPHeaderField: $0)
+            }
+        }
+
+        return request
     }
 }

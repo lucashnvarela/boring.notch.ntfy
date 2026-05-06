@@ -22,7 +22,6 @@ final class NtfyManager: ObservableObject {
         case disconnected
         case unauthorized
         case authenticated
-        case nosubscriptions
         case failed(String)
     }
 
@@ -100,10 +99,7 @@ final class NtfyManager: ObservableObject {
             case 200:
                 authState = .authenticated
                 let account = try JSONDecoder().decode(NtfyAccount.self, from: data)
-                guard let topics = account.subscriptions else {
-                    authState = .nosubscriptions
-                    return
-                }
+                guard let topics = account.subscriptions else { return }
                 topics.forEach { subscribe(to: $0) }
             case 401, 403:
                 authState = .unauthorized

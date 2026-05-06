@@ -10,64 +10,135 @@ import Defaults
 import Foundation
 import SwiftUI
 
+private struct NtfyAccount: Decodable {
+    let username: String
+    let role: String
+    let subscriptions: [NtfyTopic]?
+}
+
 @MainActor
 final class NtfyManager: ObservableObject {
+    enum AuthenticationState {
+        case disconnected
+        case unauthorized
+        case authenticated
+        case nosubscriptions
+        case failed(String)
+    }
+
     static let shared = NtfyManager()
 
-    @ObservedObject var coordinator = BoringViewCoordinator.shared
-    @Published private(set) var notifications: [NtfyNotificationModel] = [] {
-        didSet {
-            NtfyStateViewModel.shared.setNotifications(notifications)
-        }
-    }
-    @Published private(set) var connectionStateByTopic: [String: WebSocketClient.ConnectionState] = [:]
-    @Published private(set) var latestNotification: NtfyNotificationModel?
+    @Published private(set) var authState: AuthenticationState = .disconnected
 
-    private var clientsByTopic: [String: WebSocketClient] = [:]
+    private let tvm = NtfyStateViewModel.shared
+    private var wsSessions: [String: WebSocketClient] = [:]
+    private var syncMessagesTasks: [String: Task<Void, Never>] = [:]
+    private var startupPipelineTask: Task<Void, Never>?
     private var cancellables: Set<AnyCancellable> = []
 
     private init() {
         bindDefaults()
-        reconnectAll()
+        setupSystemStateObservers()
     }
 
     private func bindDefaults() {
-        Defaults.publisher(.ntfyEnabled)
-            .debounce(for: .milliseconds(150), scheduler: DispatchQueue.main)
-            .sink { [weak self] _ in self?.reconnectAll() }
-            .store(in: &cancellables)
-
-        Defaults.publisher(.ntfyTopics)
-            .sink { [weak self] _ in
-                guard let topic = Defaults[.ntfyTopics].last else { return }
-                self?.startTopic(topic)
+        Defaults.publisher(.boringNtfy)
+            .sink { [weak self] state in
+                Task { @MainActor [weak self] in
+                    state.newValue ? self?.startSession() : self?.terminateSession()
+                }
             }
             .store(in: &cancellables)
     }
 
-    func addTopic(_ topic: String) {
-        let t = topic.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !t.isEmpty, !Defaults[.ntfyTopics].contains(t) else { return }
-        Defaults[.ntfyTopics].append(t)
+    private func setupSystemStateObservers() {
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.willSleepNotification, object: nil, queue: nil
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.startSession()
+            }
+        }
+
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: nil
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.terminateSession()
+            }
+        }
     }
 
-    func reconnectAll() {
-        stopAll()
-        guard Defaults[.ntfyEnabled] else {
-            return
-        }
-        let topics = Defaults[.ntfyTopics].filter { !$0.isEmpty }
-        for topic in topics {
-            startTopic(topic)
+    private func terminateSession() {
+        startupPipelineTask?.cancel()
+        startupPipelineTask = nil
+        authState = .disconnected
+        unsubscribeAll()
+    }
+
+    private func startSession() {
+        guard Defaults[.boringNtfy] else { return }
+        startupPipelineTask?.cancel()
+        startupPipelineTask = Task { @MainActor [weak self] in
+            await self?.loadSubscriptions()
         }
     }
 
-    private func stopAll() {
-        for (_, client) in clientsByTopic {
-            client.disconnect()
+    func restartSession() {
+        terminateSession()
+        startSession()
+    }
+
+    private func loadSubscriptions() async {
+        guard let request = makeLoadSubscriptionsRequest() else { return }
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else { return }
+
+            switch httpResponse.statusCode {
+            case 200:
+                authState = .authenticated
+                let account = try JSONDecoder().decode(NtfyAccount.self, from: data)
+                guard let topics = account.subscriptions else {
+                    authState = .nosubscriptions
+                    return
+                }
+                topics.forEach { subscribe(to: $0) }
+            case 401, 403:
+                authState = .unauthorized
+                return
+            default:
+                return
+            }
+        } catch {
+            authState = .failed("Could not connect to the server")
+            NSLog("\(error)")
         }
-        clientsByTopic.removeAll()
-        connectionStateByTopic.removeAll()
+    }
+
+    private func unsubscribeAll() {
+        for topic in tvm.topics {
+            disconnect(from: topic.name)
+            tvm.removeTopic(topic)
+        }
+    }
+
+    private func subscribe(to topic: NtfyTopic) {
+        tvm.addTopic(topic)
+        connect(to: topic.name)
+    }
+
+    func toggleConnection(_ isOn: Bool, for topic: String) {
+        if isOn { connect(to: topic) }
+        else { disconnect(from: topic) }
+    }
+
+    private func disconnect(from topic: String) {
+        wsSessions[topic]?.disconnect()
+        wsSessions.removeValue(forKey: topic)
+        syncMessagesTasks[topic]?.cancel()
+        syncMessagesTasks.removeValue(forKey: topic)
     }
 
     private func connect(to topic: String) {

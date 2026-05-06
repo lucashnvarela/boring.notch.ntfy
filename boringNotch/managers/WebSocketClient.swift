@@ -5,10 +5,8 @@
 //  Created by Lucas Varela on 26/04/2026.
 //
 
-import Combine
 import Foundation
 
-@MainActor
 final class WebSocketClient {
     enum ConnectionState: Equatable {
         case disconnected
@@ -18,87 +16,79 @@ final class WebSocketClient {
     }
 
     private let session: URLSession
-    private var task: URLSessionWebSocketTask?
-    private var receiveTask: Task<Void, Never>?
-    private var intentionalDisconnect = false
+    private var socketTask: Task<Void, Never>?
+    private var connectionState: ConnectionState?
 
-    private(set) var state: ConnectionState = .disconnected
     var onStateChange: ((ConnectionState) -> Void)?
     var onMessage: ((Result<String, Error>) -> Void)?
 
     init() {
-        self.session = URLSession(configuration: URLSessionConfiguration.default)
+        self.session = URLSession(configuration: .default)
     }
 
-    func connect(url: URL, headers: [String: String]) {
-        disconnect()
+    deinit {
+        session.invalidateAndCancel()
+    }
 
-        intentionalDisconnect = false
-
-        var request = URLRequest(url: url)
-        headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
-
-        setState(.connecting)
-
-        let webSocketTask = session.webSocketTask(with: request)
-        task = webSocketTask
-
-        receiveTask = Task { [weak self] in
-            await self?.receiveLoop(task: webSocketTask)
+    func connect(with request: URLRequest) {
+        socketTask?.cancel()
+        updateState(.connecting)
+        socketTask = Task { [weak self] in
+            await self?.startConnection(with: request)
         }
-
-        webSocketTask.resume()
     }
 
     func disconnect() {
-        intentionalDisconnect = true
-
-        receiveTask?.cancel()
-        receiveTask = nil
-
-        task?.cancel(with: .normalClosure, reason: nil)
-        task = nil
-
-        setState(.disconnected)
+        socketTask?.cancel()
+        socketTask = nil
+        updateState(.disconnected)
     }
 
-    private func receiveLoop(task: URLSessionWebSocketTask) async {
-        var handshakeConfirmed = false
+    private func startConnection(with request: URLRequest) async {
+        let webSocketTask = session.webSocketTask(with: request)
 
-        while !Task.isCancelled {
-            do {
-                let message = try await task.receive()
+        await withTaskCancellationHandler {
+            webSocketTask.resume()
 
-                if !handshakeConfirmed {
-                    handshakeConfirmed = true
-                    setState(.connected)
-                }
+            while !Task.isCancelled {
+                do {
+                    let message = try await webSocketTask.receive()
 
-                switch message {
-                case let .string(text):
-                    notifyMessage(.success(text))
-                case let .data(data):
-                    if let text = String(data: data, encoding: .utf8) {
-                        notifyMessage(.success(text))
+                    updateState(.connected)
+
+                    switch message {
+                    case let .string(text):
+                        forwardMessage(.success(text))
+                    case let .data(data):
+                        if let text = String(data: data, encoding: .utf8) {
+                            forwardMessage(.success(text))
+                        }
+                    @unknown default:
+                        break
                     }
-                @unknown default:
-                    break
+                } catch {
+                    guard !Task.isCancelled else { return }
+                    
+                    updateState(.failed("\(error)"))
+                    NSLog("\(error)")
+
+                    webSocketTask.cancel(with: .abnormalClosure, reason: nil)
+                    return
                 }
-            } catch {
-                guard !intentionalDisconnect, !Task.isCancelled else { return }
-                NSLog("WebSocket error: \(error.localizedDescription)")
-                setState(.failed(error.localizedDescription))
-                return
             }
+        } onCancel: {
+            webSocketTask.cancel(with: .normalClosure, reason: nil)
         }
     }
 
-    private func setState(_ newState: ConnectionState) {
-        state = newState
-        onStateChange?(newState)
+    private func updateState(_ newState: ConnectionState) {
+        connectionState = newState
+        let callback = onStateChange
+        DispatchQueue.main.async { callback?(newState) }
     }
 
-    private func notifyMessage(_ result: Result<String, Error>) {
-        onMessage?(result)
+    private func forwardMessage(_ result: Result<String, Error>) {
+        let callback = onMessage
+        DispatchQueue.main.async { callback?(result) }
     }
 }

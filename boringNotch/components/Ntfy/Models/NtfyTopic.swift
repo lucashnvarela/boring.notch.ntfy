@@ -35,13 +35,18 @@ struct NtfyTopic: Identifiable, Codable, Equatable {
     }
 
     mutating func insertMessage(_ message: NtfyMessage) {
-        guard !messages.contains(message) else { return }
+        guard !messages.contains(where: { $0.id == message.id }) else { return }
+
         let insertAt = messages.firstIndex { $0.time < message.time } ?? messages.count
         messages.insert(message, at: insertAt)
+
+        if messages.count > 50 {
+            messages.removeLast()
+        }
     }
 
     mutating func markRead(_ message: NtfyMessage) {
-        guard let id = messages.firstIndex(where: { $0.id == message.id }), !messages[id].isRead else { return }
-        messages[id].isRead = true
+        guard let idx = messages.firstIndex(where: { $0.id == message.id }), !messages[idx].isRead else { return }
+        messages[idx].isRead = true
     }
 }

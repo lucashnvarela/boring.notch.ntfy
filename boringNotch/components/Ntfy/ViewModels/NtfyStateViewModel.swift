@@ -16,7 +16,7 @@ final class NtfyStateViewModel: ObservableObject {
     private init() {}
 
     func addTopic(_ topic: NtfyTopic) {
-        guard topics.first(where: { $0.name == topic.name }) == nil else { return }
+        guard !topics.contains(where: { $0.name == topic.name }) else { return }
         topics.append(topic)
     }
 
@@ -34,14 +34,13 @@ final class NtfyStateViewModel: ObservableObject {
     }
 
     func insertMessage(_ message: NtfyMessage) {
-        guard let id = topics.firstIndex(where: { $0.name == message.topic }) else { return }
-        guard topics[id].messages.first(where: { $0.id == message.id }) == nil else { return }
-        topics[id].insertMessage(message)
+        guard let idx = topics.firstIndex(where: { $0.name == message.topic }) else { return }
+        topics[idx].insertMessage(message)
     }
 
     func markRead(_ message: NtfyMessage) {
-        guard let id = topics.firstIndex(where: { $0.name == message.topic }) else { return }
-        topics[id].markRead(message)
+        guard let idx = topics.firstIndex(where: { $0.name == message.topic }) else { return }
+        topics[idx].markRead(message)
     }
 
     var latestMessage: NtfyMessage? {

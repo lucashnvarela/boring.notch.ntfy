@@ -70,45 +70,62 @@ final class NtfyManager: ObservableObject {
         connectionStateByTopic.removeAll()
     }
 
-    private func startTopic(_ topic: String) {
-        guard let url = makeWebSocketURL(serverURLString: Defaults[.ntfyServerURL], topic: topic) else {
-            connectionStateByTopic[topic] = .failed("Invalid server URL")
+    private func connect(to topic: String) {
+        guard case .authenticated = authState else { return }
+        guard let request = makeWebSocketRequest(for: topic) else {
+            tvm.updateConnectionState(.failed("Could not make the WebSocket request"), for: topic)
             return
         }
 
-        let headers = makeAuthHeaders(auth: Defaults[.ntfyAuth])
-        let client = WebSocketClient()
+        let wsClient = WebSocketClient()
 
-        client.onStateChange = { [weak self] state in
-            self?.connectionStateByTopic[topic] = state
+        wsClient.onStateChange = { [weak self] newState in
+            self?.tvm.updateConnectionState(newState, for: topic)
+            if case .connected = newState {
+                self?.syncMessagesTasks[topic]?.cancel()
+                self?.syncMessagesTasks[topic] = Task { @MainActor [weak self] in
+                    await self?.syncMessages(for: topic)
+                }
+            }
         }
 
-        client.onMessage = { [weak self] result in
+        wsClient.onMessage = { [weak self] result in
             switch result {
             case let .success(text):
-                self?.handleIncomingText(text, fallbackTopic: topic)
+                self?.handleResponse(Data(text.utf8))
             case .failure:
                 break
             }
         }
 
-        clientsByTopic[topic] = client
-        client.connect(url: url, headers: headers)
+        wsSessions[topic] = wsClient
+        wsClient.connect(with: request)
     }
 
-    private func handleIncomingText(_ text: String, fallbackTopic: String) {
-        guard let data = text.data(using: .utf8) else { return }
-        let decoder = JSONDecoder()
+    private func syncMessages(for topic: String) async {
+        guard case .authenticated = authState else { return }
+        let lastestMessageID = tvm.latestMessage(from: topic)?.id
+        guard let request = makeSyncMessagesRequest(for: topic, since: lastestMessageID ?? "12h") else { return }
 
-        guard let wire = try? decoder.decode(NtfyWireMessage.self, from: data),
-              let notification = wire.toNotification(fallbackTopic: fallbackTopic)
-        else { return }
+        do {
+            let (bytes, _) = try await URLSession.shared.bytes(for: request)
+            for try await text in bytes.lines {
+                guard !text.isEmpty else { return }
+                handleResponse(Data(text.utf8))
+            }
+        } catch {
+            NSLog("\(error)")
+        }
+    }
 
-        notifications.insert(notification, at: 0)
-        latestNotification = notification
+    private func handleResponse(_ data: Data) {
+        guard let message = try? JSONDecoder().decode(NtfyMessage.self, from: data) else { return }
+        guard message.event == .message else { return }
+
+        tvm.insertMessage(message)
 
         if Defaults[.ntfyEnableSneakPeek] {
-            coordinator.toggleSneakPeek(status: true, type: .ntfy, duration: 3)
+            BoringViewCoordinator.shared.toggleSneakPeek(status: true, type: .ntfy, duration: message.priority.rawValue > 3 ? 5 : 3)
         }
     }
 

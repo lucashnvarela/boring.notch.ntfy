@@ -50,11 +50,11 @@ final class WebSocketClient {
         await withTaskCancellationHandler {
             webSocketTask.resume()
 
+            updateState(.connected)
+
             while !Task.isCancelled {
                 do {
                     let message = try await webSocketTask.receive()
-
-                    updateState(.connected)
 
                     switch message {
                     case let .string(text):

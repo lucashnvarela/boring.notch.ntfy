@@ -838,67 +838,72 @@ func lighterColor(from nsColor: NSColor, amount: CGFloat = 0.14) -> Color {
 }
 
 struct Ntfy: View {
-    @Default(.ntfyEnabled) private var ntfyEnabled
+    @ObservedObject private var tvm = NtfyStateViewModel.shared
+    @ObservedObject private var manager = NtfyManager.shared
+    @Default(.boringNtfy) private var boringNtfy
     @Default(.ntfyServerURL) private var ntfyServerURL
     @Default(.ntfyEnableSneakPeek) private var ntfyEnableSneakPeek
-    @Default(.ntfyAuth) private var ntfyAuth
-    @Default(.ntfyTopics) private var ntfyTopics
+    @Default(.ntfyAuthentication) private var ntfyAuthentication
 
-    @ObservedObject private var manager = NtfyManager.shared
-
+    @State private var authMethod: NtfyAuthMethod = .none
     @State private var authUsername: String = ""
     @State private var authPassword: String = ""
     @State private var authToken: String = ""
-    @State private var newTopic: String = ""
 
-    private var authKindBinding: Binding<AuthOption> {
-        Binding<AuthOption>(
-            get: {
-                switch ntfyAuth {
-                case .none: return .none
-                case .basic: return .basic
-                case .token: return .token
-                }
-            },
-            set: { newKind in
-                switch newKind {
-                case .none:
-                    ntfyAuth = .none
-                case .basic:
-                    ntfyAuth = .basic(username: authUsername, password: authPassword)
-                case .token:
-                    ntfyAuth = .token(authToken)
-                }
-            }
-        )
+    private var isAuthValid: Bool {
+        switch authMethod {
+        case .none:
+            break
+        case .basic:
+            guard !authUsername.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+            guard !authPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+            break
+        case .token:
+            guard !authToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+            break
+        }
+        return true
     }
 
     var body: some View {
         Form {
             Section {
-                HStack {
-                    Text("Enable ntfy")
-                    Spacer()
-                    TextField("", text: $ntfyServerURL, prompt: Text(Defaults.Keys.ntfyServerURL.defaultValue))
-                        .textFieldStyle(.roundedBorder)
-                        .labelsHidden()
-                        .frame(width: 220)
-                    Toggle("", isOn: $ntfyEnabled)
-                        .labelsHidden()
-                }
-                Toggle("Show sneak peak on new notifications", isOn: $ntfyEnableSneakPeek)
+                Toggle("Enable ntfy", isOn: $boringNtfy)
+                Toggle("Show sneak peak on new messages", isOn: $ntfyEnableSneakPeek)
             } header: {
                 Text("General")
             }
 
             Section {
-                Picker("Auth", selection: authKindBinding) {
-                    ForEach(AuthOption.allCases) { kind in
-                        Text(kind.rawValue).tag(kind)
+                HStack {
+                    Text("Server URL")
+                    Spacer()
+                    TextField("", text: $ntfyServerURL, prompt: Text("https://ntfy.sh"))
+                        .textFieldStyle(.roundedBorder)
+                        .labelsHidden()
+                        .frame(width: 240)
+                }
+
+                Picker("Method", selection: $authMethod) {
+                    ForEach(NtfyAuthMethod.allCases) { method in
+                        Text(method.rawValue).tag(method)
+                    }
+                }
+                .onAppear {
+                    switch ntfyAuthentication {
+                    case .none:
+                        authMethod = .none
+                    case let .basic(username, password):
+                        authMethod = .basic
+                        authUsername = username
+                        authPassword = password
+                    case let .token(token):
+                        authMethod = .token
+                        authToken = token
                     }
                 }
 
-                switch authKindBinding.wrappedValue {
+                switch authMethod {
                 case .none:
                     EmptyView()
                 case .basic:
@@ -909,9 +914,6 @@ struct Ntfy: View {
                             .textFieldStyle(.roundedBorder)
                             .labelsHidden()
                             .frame(width: 140)
-                            .onChange(of: authUsername) { _, _ in
-                                ntfyAuth = .basic(username: authUsername, password: authPassword)
-                            }
                     }
                     HStack {
                         Text("Password")
@@ -920,9 +922,6 @@ struct Ntfy: View {
                             .textFieldStyle(.roundedBorder)
                             .labelsHidden()
                             .frame(width: 140)
-                            .onChange(of: authPassword) { _, _ in
-                                ntfyAuth = .basic(username: authUsername, password: authPassword)
-                            }
                     }
                 case .token:
                     HStack {
@@ -932,92 +931,119 @@ struct Ntfy: View {
                             .textFieldStyle(.roundedBorder)
                             .labelsHidden()
                             .frame(width: 200)
-                            .onChange(of: authToken) { _, _ in
-                                ntfyAuth = .token(authToken)
-                            }
                     }
                 }
             } header: {
                 Text("Authentication")
+            } footer: {
+                HStack {
+                    Button("Reconnect") {
+                        switch authMethod {
+                        case .none:
+                            ntfyAuthentication = .none
+                        case .basic:
+                            ntfyAuthentication = .basic(username: authUsername, password: authPassword)
+                        case .token:
+                            ntfyAuthentication = .token(authToken)
+                        }
+                        manager.restartSession()
+                    }
+                    .disabled(!boringNtfy || !isAuthValid)
+                    Spacer()
+                    HStack(spacing: 4) {
+                        switch manager.authState {
+                        case .authenticated:
+                            Image(systemName: "checkmark.circle")
+                                .foregroundStyle(.green)
+                            Text("Authenticated")
+                                .foregroundStyle(.green)
+                        case .unauthorized:
+                            Image(systemName: "exclamationmark.circle")
+                                .foregroundStyle(.red)
+                            Text("Unauthorized")
+                                .foregroundStyle(.red)
+                        case .failed(let error):
+                            Image(systemName: "exclamationmark.circle")
+                                .foregroundStyle(.red)
+                            Text(error)
+                                .foregroundStyle(.red)
+                        case .disconnected:
+                            Image(systemName: "xmark.circle")
+                                .foregroundStyle(.secondary)
+                            Text("Disconnected")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .font(.callout)
+                }
             }
 
-            Section {
-                if !ntfyTopics.isEmpty {
-                    List {
-                        ForEach(ntfyTopics, id: \.self) { topic in
-                            HStack {
-                                Text(topic)
-                                Spacer()
-                                let (icon, color) = connectionColor(manager.connectionStateByTopic[topic])
-                                Image(systemName: icon)
-                                    .imageScale(.small)
-                                    .foregroundColor(color)
-                                    .padding(.horizontal, 4)
+            if !tvm.topics.isEmpty {
+                Section {
+                    VStack {
+                        HStack(spacing: 8) {
+                            Text("Name")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Spacer()
+                            Text("Status")
+                                .frame(width: 145, alignment: .leading)
+                            Spacer()
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
 
+                        ForEach(tvm.topics) { topic in
+                            Divider()
+                            HStack(spacing: 8) {
+                                Text(topic.displayName ?? topic.name)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .foregroundStyle(topic.isConnected ? .primary : .tertiary)
+                                    .lineLimit(1)
+                                Spacer()
+                                HStack(spacing: 4) {
+                                    switch topic.connectionState {
+                                    case .connected:
+                                        Image(systemName: "wifi")
+                                            .imageScale(.small)
+                                            .foregroundStyle(.green)
+                                        Text("Connected")
+                                            .foregroundStyle(.green)
+                                    case .connecting:
+                                        ProgressView()
+                                            .controlSize(.small)
+                                    case .failed:
+                                        Image(systemName: "wifi.exclamationmark")
+                                            .imageScale(.small)
+                                            .foregroundStyle(.red)
+                                        Text("Failed")
+                                            .foregroundStyle(.red)
+                                    case .disconnected:
+                                        Image(systemName: "wifi.slash")
+                                            .imageScale(.small)
+                                            .foregroundStyle(.tertiary)
+                                        Text("Disconnected")
+                                            .foregroundStyle(.tertiary)
+                                    }
+                                }
+                                .frame(width: 100, alignment: .leading)
+                                .font(.callout)
+                                Spacer()
+                                Toggle("", isOn: Binding(
+                                    get: { topic.isConnected },
+                                    set: { manager.toggleConnection($0, for: topic.name) }
+                                ))
+                                .labelsHidden()
+                                .disabled(!boringNtfy)
                             }
-                            .padding(.vertical, 8)
-                        }
-                        .onDelete { indexSet in
-                            ntfyTopics.remove(atOffsets: indexSet)
+                            .padding(.vertical, 4)
                         }
                     }
+                } header: {
+                    Text("Topics")
                 }
-                HStack {
-                    Spacer()
-                    TextField("", text: $newTopic)
-                        .textFieldStyle(.roundedBorder)
-                        .labelsHidden()
-                        .frame(width: 120)
-                    Button("Subscribe") {
-                        manager.addTopic(newTopic)
-                        newTopic = ""
-                    }
-                    .disabled(
-                        newTopic.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-                        ntfyTopics.contains(newTopic.trimmingCharacters(in: .whitespacesAndNewlines))
-                    )
-                }
-            } header: {
-                Text("Topics")
-            } footer: {
-                Button("Reconnect") {
-                    manager.reconnectAll()
-                }
-                .buttonStyle(.plain)
-                .disabled(!ntfyEnabled || ntfyTopics.isEmpty)
             }
         }
         .navigationTitle("Ntfy")
-        .onAppear {
-           hydrateAuthInputsFromDefaults()
-            _ = manager
-        }
-    }
-
-    private func hydrateAuthInputsFromDefaults() {
-        switch ntfyAuth {
-        case .none:
-            authUsername = ""
-            authPassword = ""
-            authToken = ""
-        case let .basic(username, password):
-            authUsername = username
-            authPassword = password
-            authToken = ""
-        case let .token(t):
-            authToken = t
-            authUsername = ""
-            authPassword = ""
-        }
-    }
-
-    private func connectionColor(_ state: WebSocketClient.ConnectionState?) -> (icon: String, color: Color) {
-        switch state {
-        case .connecting:    return ("wifi", .yellow)
-        case .connected:     return ("wifi", .green)
-        case .failed:        return ("wifi.exclamationmark", .red)
-        default:             return ("wifi.slash", .gray)
-        }
     }
 }
 

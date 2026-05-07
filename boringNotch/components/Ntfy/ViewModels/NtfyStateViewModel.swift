@@ -15,13 +15,13 @@ final class NtfyStateViewModel: ObservableObject {
 
     private init() {}
 
-    func addTopic(_ topic: NtfyTopic) {
+    func subscribe(to topic: NtfyTopic) {
         guard !topics.contains(where: { $0.name == topic.name }) else { return }
         topics.append(topic)
     }
 
-    func removeTopic(_ topic: NtfyTopic) {
-        topics.removeAll { $0.name == topic.name }
+    func unsubscribeAll() {
+        topics.removeAll()
     }
 
     func updateConnectionState(_ newState: WebSocketClient.ConnectionState, for topic: String) {

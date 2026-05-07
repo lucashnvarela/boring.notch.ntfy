@@ -18,7 +18,7 @@ private struct NtfyAccount: Decodable {
 
 @MainActor
 final class NtfyManager: ObservableObject {
-    enum AuthenticationState {
+    enum SessionState {
         case disconnected
         case unauthorized
         case authenticated
@@ -27,24 +27,25 @@ final class NtfyManager: ObservableObject {
 
     static let shared = NtfyManager()
 
-    @Published private(set) var authState: AuthenticationState = .disconnected
+    @Published private(set) var authState: SessionState = .disconnected
 
     private let tvm = NtfyStateViewModel.shared
-    private var wsSessions: [String: WebSocketClient] = [:]
+    private var webSocketConnections: [String: WebSocketClient] = [:]
     private var syncMessagesTasks: [String: Task<Void, Never>] = [:]
-    private var startupPipelineTask: Task<Void, Never>?
+    private var sessionInitTask: Task<Void, Never>?
     private var cancellables: Set<AnyCancellable> = []
 
     private init() {
-        bindDefaults()
+        setupSettingsObserver()
         setupSystemStateObservers()
     }
 
-    private func bindDefaults() {
+    private func setupSettingsObserver() {
         Defaults.publisher(.boringNtfy)
+            .debounce(for: .milliseconds(150), scheduler: DispatchQueue.main)
             .sink { [weak self] state in
                 Task { @MainActor [weak self] in
-                    state.newValue ? self?.startSession() : self?.terminateSession()
+                    state.newValue ? self?.startSession() : self?.stopSession()
                 }
             }
             .store(in: &cancellables)
@@ -55,7 +56,7 @@ final class NtfyManager: ObservableObject {
             forName: NSWorkspace.willSleepNotification, object: nil, queue: nil
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.startSession()
+                self?.suspendSession()
             }
         }
 
@@ -63,66 +64,71 @@ final class NtfyManager: ObservableObject {
             forName: NSWorkspace.didWakeNotification, object: nil, queue: nil
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.terminateSession()
+                self?.startSession()
             }
         }
     }
 
-    private func terminateSession() {
-        startupPipelineTask?.cancel()
-        startupPipelineTask = nil
+    private func stopSession() {
+        sessionInitTask?.cancel()
+        sessionInitTask = nil
         authState = .disconnected
-        unsubscribeAll()
+        tvm.unsubscribeAll()
+    }
+
+    private func suspendSession() {
+        sessionInitTask?.cancel()
+        sessionInitTask = nil
+        authState = .disconnected
+        tvm.topics.forEach {
+            disconnect(from: $0.name)
+        }
     }
 
     private func startSession() {
         guard Defaults[.boringNtfy] else { return }
-        startupPipelineTask?.cancel()
-        startupPipelineTask = Task { @MainActor [weak self] in
+        sessionInitTask?.cancel()
+        sessionInitTask = Task { @MainActor [weak self] in
             await self?.loadSubscriptions()
+            self?.tvm.topics.forEach {
+                self?.connect(to: $0.name)
+            }
         }
     }
 
     func restartSession() {
-        terminateSession()
+        stopSession()
         startSession()
     }
 
     private func loadSubscriptions() async {
-        guard let request = makeLoadSubscriptionsRequest() else { return }
+        guard let request = makeLoadSubscriptionsRequest() else {
+            authState = .failed("Could not make the HTTP request")
+            return
+        }
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse else { return }
+            guard let statusCode = (response as? HTTPURLResponse)?.statusCode else { return }
 
-            switch httpResponse.statusCode {
+            switch statusCode {
             case 200:
                 authState = .authenticated
                 let account = try JSONDecoder().decode(NtfyAccount.self, from: data)
                 guard let topics = account.subscriptions else { return }
-                topics.forEach { subscribe(to: $0) }
+                topics.forEach { tvm.subscribe(to: $0) }
             case 401, 403:
                 authState = .unauthorized
                 return
             default:
+                authState = .failed("Could not connect to the server")
                 return
             }
         } catch {
+            guard !Task.isCancelled else { return }
             authState = .failed("Could not connect to the server")
             NSLog("\(error)")
         }
-    }
-
-    private func unsubscribeAll() {
-        for topic in tvm.topics {
-            disconnect(from: topic.name)
-            tvm.removeTopic(topic)
-        }
-    }
-
-    private func subscribe(to topic: NtfyTopic) {
-        tvm.addTopic(topic)
-        connect(to: topic.name)
     }
 
     func toggleConnection(_ isOn: Bool, for topic: String) {
@@ -131,10 +137,8 @@ final class NtfyManager: ObservableObject {
     }
 
     private func disconnect(from topic: String) {
-        wsSessions[topic]?.disconnect()
-        wsSessions.removeValue(forKey: topic)
-        syncMessagesTasks[topic]?.cancel()
-        syncMessagesTasks.removeValue(forKey: topic)
+        webSocketConnections[topic]?.disconnect()
+        webSocketConnections.removeValue(forKey: topic)
     }
 
     private func connect(to topic: String) {
@@ -144,29 +148,37 @@ final class NtfyManager: ObservableObject {
             return
         }
 
-        let wsClient = WebSocketClient()
+        let client = WebSocketClient()
 
-        wsClient.onStateChange = { [weak self] newState in
+        client.onStateChange = { [weak self] newState in
             self?.tvm.updateConnectionState(newState, for: topic)
-            if case .connected = newState {
+
+            switch newState {
+            case .connected:
                 self?.syncMessagesTasks[topic]?.cancel()
                 self?.syncMessagesTasks[topic] = Task { @MainActor [weak self] in
                     await self?.syncMessages(for: topic)
                 }
-            }
-        }
-
-        wsClient.onMessage = { [weak self] result in
-            switch result {
-            case let .success(text):
-                self?.handleResponse(Data(text.utf8))
-            case .failure:
+            case .disconnected, .failed:
+                self?.syncMessagesTasks[topic]?.cancel()
+                self?.syncMessagesTasks.removeValue(forKey: topic)
+            case .connecting:
                 break
             }
         }
 
-        wsSessions[topic] = wsClient
-        wsClient.connect(with: request)
+        client.onMessage = { [weak self] result in
+            switch result {
+            case let .success(text):
+                self?.handleResponse(Data(text.utf8))
+            case let .failure(error):
+                self?.tvm.updateConnectionState(.failed("Could not receive the WebSocket message"), for: topic)
+                NSLog("\(error)")
+            }
+        }
+
+        webSocketConnections[topic] = client
+        client.connect(with: request)
     }
 
     private func syncMessages(for topic: String) async {
@@ -181,6 +193,7 @@ final class NtfyManager: ObservableObject {
                 handleResponse(Data(text.utf8))
             }
         } catch {
+            guard !Task.isCancelled else { return }
             NSLog("\(error)")
         }
     }

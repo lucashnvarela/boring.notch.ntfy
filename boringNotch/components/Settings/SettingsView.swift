@@ -1125,7 +1125,7 @@ struct About: View {
 }
 
 struct Shelf: View {
-
+    
     @Default(.shelfTapToOpen) var shelfTapToOpen: Bool
     @Default(.quickShareProvider) var quickShareProvider
     @Default(.expandedDragDetection) var expandedDragDetection: Bool
@@ -1134,11 +1134,11 @@ struct Shelf: View {
     private var selectedProvider: QuickShareProvider? {
         quickShareService.availableProviders.first(where: { $0.id == quickShareProvider })
     }
-
+    
     init() {
         Task { await QuickShareService.shared.discoverAvailableProviders() }
     }
-
+    
     var body: some View {
         Form {
             Section {
@@ -1169,7 +1169,7 @@ struct Shelf: View {
                     Text("General")
                 }
             }
-
+            
             Section {
                 Picker("Quick Share Service", selection: $quickShareProvider) {
                     ForEach(quickShareService.availableProviders, id: \.id) { provider in
@@ -1191,7 +1191,7 @@ struct Shelf: View {
                     }
                 }
                 .pickerStyle(.menu)
-
+                
                 if let selectedProvider = selectedProvider {
                     HStack {
                         Group {
@@ -1217,7 +1217,7 @@ struct Shelf: View {
                     .padding(.vertical, 4)
                 }
                 // Providers are always enabled; user can pick default service above.
-
+                
             } header: {
                 HStack {
                     Text("Quick Share")
@@ -1630,12 +1630,12 @@ struct Advanced: View {
     @Default(.extendHoverArea) var extendHoverArea
     @Default(.showOnLockScreen) var showOnLockScreen
     @Default(.hideFromScreenRecording) var hideFromScreenRecording
-
+    
     @State private var customAccentColor: Color = .accentColor
     @State private var selectedPresetColor: PresetAccentColor? = nil
     let icons: [String] = ["logo2"]
     @State private var selectedIcon: String = "logo2"
-
+    
     // macOS accent colors
     enum PresetAccentColor: String, CaseIterable, Identifiable {
         case blue = "Blue"
@@ -1646,9 +1646,9 @@ struct Advanced: View {
         case yellow = "Yellow"
         case green = "Green"
         case graphite = "Graphite"
-
+        
         var id: String { self.rawValue }
-
+        
         var color: Color {
             switch self {
             case .blue: return Color(red: 0.0, green: 0.478, blue: 1.0)
@@ -1662,7 +1662,7 @@ struct Advanced: View {
             }
         }
     }
-
+    
     var body: some View {
         Form {
             Section {
@@ -1673,7 +1673,7 @@ struct Advanced: View {
                         Text("Custom").tag(true)
                     }
                     .pickerStyle(.segmented)
-
+                    
                     if !useCustomAccentColor {
                         // System accent info
                         VStack(alignment: .leading, spacing: 8) {
@@ -1683,7 +1683,7 @@ struct Advanced: View {
                                     color: .accentColor,
                                     isSystemDefault: true
                                 ) {}
-
+                                
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("Using System Accent")
                                         .font(.body)
@@ -1701,7 +1701,7 @@ struct Advanced: View {
                                 .font(.caption)
                                 .fontWeight(.semibold)
                                 .foregroundStyle(.secondary)
-
+                            
                             HStack(spacing: 12) {
                                 ForEach(PresetAccentColor.allCases) { preset in
                                     AccentCircleButton(
@@ -1717,10 +1717,10 @@ struct Advanced: View {
                                 }
                                 Spacer()
                             }
-
+                            
                             Divider()
                                 .padding(.vertical, 4)
-
+                            
                             // Custom color picker
                             HStack(spacing: 12) {
                                 VStack(alignment: .leading, spacing: 2) {
@@ -1730,9 +1730,9 @@ struct Advanced: View {
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
-
+                                
                                 Spacer()
-
+                                
                                 ColorPicker(selection: Binding(
                                     get: { customAccentColor },
                                     set: { newColor in
@@ -1746,7 +1746,7 @@ struct Advanced: View {
                                         Circle()
                                             .fill(customAccentColor)
                                             .frame(width: 32, height: 32)
-
+                                        
                                         if selectedPresetColor == nil {
                                             Circle()
                                                 .strokeBorder(.primary.opacity(0.3), lineWidth: 2)
@@ -1771,7 +1771,7 @@ struct Advanced: View {
             .onAppear {
                 initializeAccentColorState()
             }
-
+            
             Section {
                 Defaults.Toggle(key: .enableShadow) {
                     Text("Enable window shadow")
@@ -1782,7 +1782,7 @@ struct Advanced: View {
             } header: {
                 Text("Window Appearance")
             }
-
+            
             Section {
                 HStack {
                     ForEach(icons, id: \.self) { icon in
@@ -1826,7 +1826,7 @@ struct Advanced: View {
                     customBadge(text: "Coming soon")
                 }
             }
-
+            
             Section {
                 Defaults.Toggle(key: .extendHoverArea) {
                     Text("Extend hover area")
@@ -1850,14 +1850,14 @@ struct Advanced: View {
             loadCustomColor()
         }
     }
-
+    
     private func forceUiUpdate() {
         // Force refresh the UI
         DispatchQueue.main.async {
             NotificationCenter.default.post(name: Notification.Name("AccentColorChanged"), object: nil)
         }
     }
-
+    
     private func saveCustomColor(_ color: Color) {
         let nsColor = NSColor(color)
         if let colorData = try? NSKeyedArchiver.archivedData(withRootObject: nsColor, requiringSecureCoding: false) {
@@ -1865,12 +1865,12 @@ struct Advanced: View {
             forceUiUpdate()
         }
     }
-
+    
     private func loadCustomColor() {
         if let colorData = Defaults[.customAccentColorData],
            let nsColor = try? NSKeyedUnarchiver.unarchivedObject(ofClass: NSColor.self, from: colorData) {
             customAccentColor = Color(nsColor: nsColor)
-
+            
             // Check if loaded color matches a preset
             selectedPresetColor = nil
             for preset in PresetAccentColor.allCases {
@@ -1881,16 +1881,16 @@ struct Advanced: View {
             }
         }
     }
-
+    
     private func colorsAreEqual(_ color1: Color, _ color2: Color) -> Bool {
         let nsColor1 = NSColor(color1).usingColorSpace(.sRGB) ?? NSColor(color1)
         let nsColor2 = NSColor(color2).usingColorSpace(.sRGB) ?? NSColor(color2)
-
+        
         return abs(nsColor1.redComponent - nsColor2.redComponent) < 0.01 &&
                abs(nsColor1.greenComponent - nsColor2.greenComponent) < 0.01 &&
                abs(nsColor1.blueComponent - nsColor2.blueComponent) < 0.01
     }
-
+    
     private func initializeAccentColorState() {
         if !useCustomAccentColor {
             selectedPresetColor = nil // Multicolor is selected when useCustomAccentColor is false
@@ -1907,7 +1907,7 @@ struct AccentCircleButton: View {
     var isSystemDefault: Bool = false
     var isMulticolor: Bool = false
     let action: () -> Void
-
+    
     var body: some View {
         Button(action: action) {
             ZStack {
@@ -1915,12 +1915,12 @@ struct AccentCircleButton: View {
                 Circle()
                     .fill(color)
                     .frame(width: 32, height: 32)
-
+                
                 // Subtle border
                 Circle()
                     .strokeBorder(Color.primary.opacity(0.15), lineWidth: 1)
                     .frame(width: 32, height: 32)
-
+                
                 // Apple-style highlight ring around the middle when selected
                 if isSelected {
                     Circle()

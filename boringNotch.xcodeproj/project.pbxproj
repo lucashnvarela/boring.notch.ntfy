@@ -114,7 +114,6 @@
 		66772C382FAE21D90090306E /* NtfyTopic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66772C302FAE21D90090306E /* NtfyTopic.swift */; };
 		66772C392FAE21D90090306E /* NtfyStateViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66772C322FAE21D90090306E /* NtfyStateViewModel.swift */; };
 		66772C3A2FAE21D90090306E /* NtfyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66772C342FAE21D90090306E /* NtfyView.swift */; };
-		66772C3E2FAE21E00090306E /* ding.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 66772C3B2FAE21E00090306E /* ding.mp3 */; };
 		66C7C4382F9CEE4C00F11857 /* NtfyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66C7C4362F9CEE4C00F11857 /* NtfyManager.swift */; };
 		66C7C4392F9CEE4C00F11857 /* WebSocketClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66C7C4372F9CEE4C00F11857 /* WebSocketClient.swift */; };
 		9A0887322C7A693000C160EA /* TabButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A0887312C7A693000C160EA /* TabButton.swift */; };
@@ -291,7 +290,6 @@
 		66772C302FAE21D90090306E /* NtfyTopic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NtfyTopic.swift; sourceTree = "<group>"; };
 		66772C322FAE21D90090306E /* NtfyStateViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NtfyStateViewModel.swift; sourceTree = "<group>"; };
 		66772C342FAE21D90090306E /* NtfyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NtfyView.swift; sourceTree = "<group>"; };
-		66772C3B2FAE21E00090306E /* ding.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = ding.mp3; sourceTree = "<group>"; };
 		66C7C4362F9CEE4C00F11857 /* NtfyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NtfyManager.swift; sourceTree = "<group>"; };
 		66C7C4372F9CEE4C00F11857 /* WebSocketClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketClient.swift; sourceTree = "<group>"; };
 		9A0887312C7A693000C160EA /* TabButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabButton.swift; sourceTree = "<group>"; };
@@ -694,7 +692,6 @@
 		66772C3C2FAE21E00090306E /* Audio */ = {
 			isa = PBXGroup;
 			children = (
-				66772C3B2FAE21E00090306E /* ding.mp3 */,
 			);
 			path = Audio;
 			sourceTree = "<group>";
@@ -953,7 +950,6 @@
 			files = (
 				14CEF41D2C5CAED400855D72 /* Preview Assets.xcassets in Resources */,
 				14CEF41A2C5CAED400855D72 /* Assets.xcassets in Resources */,
-				66772C3E2FAE21E00090306E /* ding.mp3 in Resources */,
 				112B0EB82E30DD0F00562D6C /* MediaRemoteAdapterTestClient in Resources */,
 				112B0EB92E30DD0F00562D6C /* mediaremote-adapter.pl in Resources */,
 				B17266E12C6532560031BA0D /* Localizable.xcstrings in Resources */,

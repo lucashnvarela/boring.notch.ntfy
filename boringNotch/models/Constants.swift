@@ -68,6 +68,20 @@ enum OptionKeyAction: String, CaseIterable, Identifiable, Defaults.Serializable 
     var id: String { self.rawValue }
 }
 
+enum NtfyAuthMethod: String, CaseIterable, Identifiable {
+    case none = "None"
+    case basic = "Basic"
+    case token = "Token"
+
+    var id: String { rawValue }
+}
+
+enum NtfyAuthConfig: Codable, Equatable, Defaults.Serializable {
+    case none
+    case basic(username: String, password: String)
+    case token(String)
+}
+
 extension Defaults.Keys {
     // MARK: General
     static let menubarIcon = Key<Bool>("menubarIcon", default: true)
@@ -138,6 +152,12 @@ extension Defaults.Keys {
         default: MusicControlButton.defaultLayout.count
     )
     
+    // MARK: ntfy
+    static let boringNtfy = Key<Bool>("boringNtfy", default: false)
+    static let ntfyServerURL = Key<String>("ntfyServerURL", default: "")
+    static let ntfyEnableSneakPeek = Key<Bool>("ntfyEnableSneakPeek", default: false)
+    static let ntfyAuthentication = Key<NtfyAuthConfig>("ntfyAuthentication", default: .none)
+
     // MARK: Battery
     static let showPowerStatusNotifications = Key<Bool>("showPowerStatusNotifications", default: true)
     static let showBatteryIndicator = Key<Bool>("showBatteryIndicator", default: true)

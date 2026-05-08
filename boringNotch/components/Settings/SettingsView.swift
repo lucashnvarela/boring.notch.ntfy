@@ -39,6 +39,9 @@ struct SettingsView: View {
                 NavigationLink(value: "Calendar") {
                     Label("Calendar", systemImage: "calendar")
                 }
+                NavigationLink(value: "Ntfy") {
+                    Label("Ntfy", systemImage: "text.bubble.fill")
+                }
                 NavigationLink(value: "HUD") {
                     Label("HUDs", systemImage: "dial.medium.fill")
                 }
@@ -79,6 +82,8 @@ struct SettingsView: View {
                     Media()
                 case "Calendar":
                     CalendarSettings()
+                case "Ntfy":
+                    Ntfy()
                 case "HUD":
                     HUD()
                 case "Battery":
@@ -830,6 +835,216 @@ func lighterColor(from nsColor: NSColor, amount: CGFloat = 0.14) -> Color {
     let nb = lighten(b)
 
     return Color(red: Double(nr), green: Double(ng), blue: Double(nb), opacity: Double(a))
+}
+
+struct Ntfy: View {
+    @ObservedObject private var tvm = NtfyStateViewModel.shared
+    @ObservedObject private var manager = NtfyManager.shared
+    @Default(.boringNtfy) private var boringNtfy
+    @Default(.ntfyServerURL) private var ntfyServerURL
+    @Default(.ntfyEnableSneakPeek) private var ntfyEnableSneakPeek
+    @Default(.ntfyAuthentication) private var ntfyAuthentication
+
+    @State private var authMethod: NtfyAuthMethod = .none
+    @State private var authUsername: String = ""
+    @State private var authPassword: String = ""
+    @State private var authToken: String = ""
+
+    private var isAuthValid: Bool {
+        switch authMethod {
+        case .none:
+            break
+        case .basic:
+            guard !authUsername.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+            guard !authPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+            break
+        case .token:
+            guard !authToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+            break
+        }
+        return true
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Enable ntfy", isOn: $boringNtfy)
+                Toggle("Show sneak peak on new messages", isOn: $ntfyEnableSneakPeek)
+            } header: {
+                Text("General")
+            }
+
+            Section {
+                HStack {
+                    Text("Server URL")
+                    Spacer()
+                    TextField("", text: $ntfyServerURL, prompt: Text("https://ntfy.sh"))
+                        .textFieldStyle(.roundedBorder)
+                        .labelsHidden()
+                        .frame(width: 240)
+                }
+
+                Picker("Method", selection: $authMethod) {
+                    ForEach(NtfyAuthMethod.allCases) { method in
+                        Text(method.rawValue).tag(method)
+                    }
+                }
+                .onAppear {
+                    switch ntfyAuthentication {
+                    case .none:
+                        authMethod = .none
+                    case let .basic(username, password):
+                        authMethod = .basic
+                        authUsername = username
+                        authPassword = password
+                    case let .token(token):
+                        authMethod = .token
+                        authToken = token
+                    }
+                }
+
+                switch authMethod {
+                case .none:
+                    EmptyView()
+                case .basic:
+                    HStack {
+                        Text("Username")
+                        Spacer()
+                        TextField("", text: $authUsername)
+                            .textFieldStyle(.roundedBorder)
+                            .labelsHidden()
+                            .frame(width: 140)
+                    }
+                    HStack {
+                        Text("Password")
+                        Spacer()
+                        SecureField("", text: $authPassword)
+                            .textFieldStyle(.roundedBorder)
+                            .labelsHidden()
+                            .frame(width: 140)
+                    }
+                case .token:
+                    HStack {
+                        Text("Token")
+                        Spacer()
+                        SecureField("", text: $authToken)
+                            .textFieldStyle(.roundedBorder)
+                            .labelsHidden()
+                            .frame(width: 200)
+                    }
+                }
+            } header: {
+                Text("Authentication")
+            } footer: {
+                HStack {
+                    Button("Reconnect") {
+                        switch authMethod {
+                        case .none:
+                            ntfyAuthentication = .none
+                        case .basic:
+                            ntfyAuthentication = .basic(username: authUsername, password: authPassword)
+                        case .token:
+                            ntfyAuthentication = .token(authToken)
+                        }
+                        manager.restartSession()
+                    }
+                    .disabled(!boringNtfy || !isAuthValid)
+                    Spacer()
+                    HStack(spacing: 4) {
+                        switch manager.authState {
+                        case .authenticated:
+                            Image(systemName: "checkmark.circle")
+                                .foregroundStyle(.green)
+                            Text("Authenticated")
+                                .foregroundStyle(.green)
+                        case .unauthorized:
+                            Image(systemName: "exclamationmark.circle")
+                                .foregroundStyle(.red)
+                            Text("Unauthorized")
+                                .foregroundStyle(.red)
+                        case .failed(let error):
+                            Image(systemName: "exclamationmark.circle")
+                                .foregroundStyle(.red)
+                            Text(error)
+                                .foregroundStyle(.red)
+                        case .disconnected:
+                            Image(systemName: "xmark.circle")
+                                .foregroundStyle(.secondary)
+                            Text("Disconnected")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .font(.callout)
+                }
+            }
+
+            if !tvm.topics.isEmpty {
+                Section {
+                    VStack {
+                        HStack(spacing: 8) {
+                            Text("Name")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Spacer()
+                            Text("Status")
+                                .frame(width: 145, alignment: .leading)
+                            Spacer()
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                        ForEach(tvm.topics) { topic in
+                            Divider()
+                            HStack(spacing: 8) {
+                                Text(topic.displayName ?? topic.name)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .foregroundStyle(topic.isConnected ? .primary : .tertiary)
+                                    .lineLimit(1)
+                                Spacer()
+                                HStack(spacing: 4) {
+                                    switch topic.connectionState {
+                                    case .connected:
+                                        Image(systemName: "wifi")
+                                            .imageScale(.small)
+                                            .foregroundStyle(.green)
+                                        Text("Connected")
+                                            .foregroundStyle(.green)
+                                    case .connecting:
+                                        ProgressView()
+                                            .controlSize(.small)
+                                    case .failed:
+                                        Image(systemName: "wifi.exclamationmark")
+                                            .imageScale(.small)
+                                            .foregroundStyle(.red)
+                                        Text("Failed")
+                                            .foregroundStyle(.red)
+                                    case .disconnected:
+                                        Image(systemName: "wifi.slash")
+                                            .imageScale(.small)
+                                            .foregroundStyle(.tertiary)
+                                        Text("Disconnected")
+                                            .foregroundStyle(.tertiary)
+                                    }
+                                }
+                                .frame(width: 100, alignment: .leading)
+                                .font(.callout)
+                                Spacer()
+                                Toggle("", isOn: Binding(
+                                    get: { topic.isConnected },
+                                    set: { manager.toggleConnection($0, for: topic.name) }
+                                ))
+                                .labelsHidden()
+                                .disabled(!boringNtfy)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                } header: {
+                    Text("Topics")
+                }
+            }
+        }
+        .navigationTitle("Ntfy")
+    }
 }
 
 struct About: View {

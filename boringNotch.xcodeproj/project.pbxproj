@@ -110,6 +110,13 @@
 		5917FD112E57891600E87F1C /* MediaKeyInterceptor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5917FD102E57891600E87F1C /* MediaKeyInterceptor.swift */; };
 		5955950D2E900ED800C66711 /* ApplicationRelauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5955950C2E900ED800C66711 /* ApplicationRelauncher.swift */; };
 		59D8C23C2E589FAA00147B33 /* VolumeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59D8C23B2E589FAA00147B33 /* VolumeManager.swift */; };
+		66772C372FAE21D90090306E /* NtfyMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66772C2F2FAE21D90090306E /* NtfyMessage.swift */; };
+		66772C382FAE21D90090306E /* NtfyTopic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66772C302FAE21D90090306E /* NtfyTopic.swift */; };
+		66772C392FAE21D90090306E /* NtfyStateViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66772C322FAE21D90090306E /* NtfyStateViewModel.swift */; };
+		66772C3A2FAE21D90090306E /* NtfyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66772C342FAE21D90090306E /* NtfyView.swift */; };
+		66772C3E2FAE21E00090306E /* ding.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 66772C3B2FAE21E00090306E /* ding.mp3 */; };
+		66C7C4382F9CEE4C00F11857 /* NtfyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66C7C4362F9CEE4C00F11857 /* NtfyManager.swift */; };
+		66C7C4392F9CEE4C00F11857 /* WebSocketClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66C7C4372F9CEE4C00F11857 /* WebSocketClient.swift */; };
 		9A0887322C7A693000C160EA /* TabButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A0887312C7A693000C160EA /* TabButton.swift */; };
 		9A0887352C7AFF8E00C160EA /* TabSelectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A0887342C7AFF8E00C160EA /* TabSelectionView.swift */; };
 		9A987A0D2C73CA66005CA465 /* ShelfView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A987A032C73CA66005CA465 /* ShelfView.swift */; };
@@ -280,6 +287,13 @@
 		5917FD102E57891600E87F1C /* MediaKeyInterceptor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaKeyInterceptor.swift; sourceTree = "<group>"; };
 		5955950C2E900ED800C66711 /* ApplicationRelauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationRelauncher.swift; sourceTree = "<group>"; };
 		59D8C23B2E589FAA00147B33 /* VolumeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeManager.swift; sourceTree = "<group>"; };
+		66772C2F2FAE21D90090306E /* NtfyMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NtfyMessage.swift; sourceTree = "<group>"; };
+		66772C302FAE21D90090306E /* NtfyTopic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NtfyTopic.swift; sourceTree = "<group>"; };
+		66772C322FAE21D90090306E /* NtfyStateViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NtfyStateViewModel.swift; sourceTree = "<group>"; };
+		66772C342FAE21D90090306E /* NtfyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NtfyView.swift; sourceTree = "<group>"; };
+		66772C3B2FAE21E00090306E /* ding.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = ding.mp3; sourceTree = "<group>"; };
+		66C7C4362F9CEE4C00F11857 /* NtfyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NtfyManager.swift; sourceTree = "<group>"; };
+		66C7C4372F9CEE4C00F11857 /* WebSocketClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketClient.swift; sourceTree = "<group>"; };
 		9A0887312C7A693000C160EA /* TabButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabButton.swift; sourceTree = "<group>"; };
 		9A0887342C7AFF8E00C160EA /* TabSelectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabSelectionView.swift; sourceTree = "<group>"; };
 		9A987A032C73CA66005CA465 /* ShelfView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ShelfView.swift; sourceTree = "<group>"; };
@@ -486,6 +500,7 @@
 		1471639B2C5D362F0068B555 /* components */ = {
 			isa = PBXGroup;
 			children = (
+				66772C362FAE21D90090306E /* Ntfy */,
 				B141C23B2CA5F50900AC8CC8 /* Onboarding */,
 				B1C448992C97375A001F0858 /* Tips */,
 				14C08BB72C8DE49E000F8AA0 /* Calendar */,
@@ -510,6 +525,8 @@
 		147163B52C5D804B0068B555 /* managers */ = {
 			isa = PBXGroup;
 			children = (
+				66C7C4362F9CEE4C00F11857 /* NtfyManager.swift */,
+				66C7C4372F9CEE4C00F11857 /* WebSocketClient.swift */,
 				11D58EA12E760AE100FA8377 /* ImageService.swift */,
 				F38DE6472D8243E2008B5C6D /* BatteryActivityManager.swift */,
 				112FB7342CCF16F70015238C /* NotchSpaceManager.swift */,
@@ -561,6 +578,7 @@
 		14CEF4142C5CAED300855D72 /* boringNotch */ = {
 			isa = PBXGroup;
 			children = (
+				66772C3D2FAE21E00090306E /* Resources */,
 				11F748672EC9AC9600F841DB /* XPCHelperClient */,
 				116398942DF5D6B40052E6AF /* Providers */,
 				14288DE22C6E016F00B9F80C /* observers */,
@@ -636,6 +654,57 @@
 				1153BD902D986DB300979FB0 /* PlaybackState.swift */,
 			);
 			path = models;
+			sourceTree = "<group>";
+		};
+		66772C312FAE21D90090306E /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				66772C2F2FAE21D90090306E /* NtfyMessage.swift */,
+				66772C302FAE21D90090306E /* NtfyTopic.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		66772C332FAE21D90090306E /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				66772C322FAE21D90090306E /* NtfyStateViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		66772C352FAE21D90090306E /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				66772C342FAE21D90090306E /* NtfyView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		66772C362FAE21D90090306E /* Ntfy */ = {
+			isa = PBXGroup;
+			children = (
+				66772C312FAE21D90090306E /* Models */,
+				66772C332FAE21D90090306E /* ViewModels */,
+				66772C352FAE21D90090306E /* Views */,
+			);
+			path = Ntfy;
+			sourceTree = "<group>";
+		};
+		66772C3C2FAE21E00090306E /* Audio */ = {
+			isa = PBXGroup;
+			children = (
+				66772C3B2FAE21E00090306E /* ding.mp3 */,
+			);
+			path = Audio;
+			sourceTree = "<group>";
+		};
+		66772C3D2FAE21E00090306E /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				66772C3C2FAE21E00090306E /* Audio */,
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 		9A0887332C7AFF7E00C160EA /* Tabs */ = {
@@ -827,7 +896,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1640;
-				LastUpgradeCheck = 1640;
+				LastUpgradeCheck = 2640;
 				TargetAttributes = {
 					11F7484E2EC9AABA00F841DB = {
 						CreatedOnToolsVersion = 16.4;
@@ -884,6 +953,7 @@
 			files = (
 				14CEF41D2C5CAED400855D72 /* Preview Assets.xcassets in Resources */,
 				14CEF41A2C5CAED400855D72 /* Assets.xcassets in Resources */,
+				66772C3E2FAE21E00090306E /* ding.mp3 in Resources */,
 				112B0EB82E30DD0F00562D6C /* MediaRemoteAdapterTestClient in Resources */,
 				112B0EB92E30DD0F00562D6C /* mediaremote-adapter.pl in Resources */,
 				B17266E12C6532560031BA0D /* Localizable.xcstrings in Resources */,
@@ -952,8 +1022,14 @@
 				5917FD112E57891600E87F1C /* MediaKeyInterceptor.swift in Sources */,
 				14C08BC12C8E03AD000F8AA0 /* NSImage+Extensions.swift in Sources */,
 				149E0B9A2C737D40006418B1 /* WebcamView.swift in Sources */,
+				66C7C4382F9CEE4C00F11857 /* NtfyManager.swift in Sources */,
+				66C7C4392F9CEE4C00F11857 /* WebSocketClient.swift in Sources */,
 				1471639A2C5D35FF0068B555 /* MusicManager.swift in Sources */,
 				B1B112932C6A577E00093D8F /* MouseTracker.swift in Sources */,
+				66772C372FAE21D90090306E /* NtfyMessage.swift in Sources */,
+				66772C382FAE21D90090306E /* NtfyTopic.swift in Sources */,
+				66772C392FAE21D90090306E /* NtfyStateViewModel.swift in Sources */,
+				66772C3A2FAE21D90090306E /* NtfyView.swift in Sources */,
 				B1C448962C9712C4001F0858 /* ActionBar.swift in Sources */,
 				118EBE312E9717DB00D54B5A /* URL+SecurityScoped.swift in Sources */,
 				1132E5162E777C140068732D /* YouTubeMusicAuthentication.swift in Sources */,
@@ -1044,6 +1120,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 271;
 				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = BoringNotchXPCHelper/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = BoringNotchXPCHelper;
@@ -1069,6 +1146,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 271;
 				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = BoringNotchXPCHelper/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = BoringNotchXPCHelper;
@@ -1143,6 +1221,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_STRICT_CONCURRENCY = targeted;
@@ -1201,7 +1280,9 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = NO;
 				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_STRICT_CONCURRENCY = targeted;
 				SWIFT_VERSION = 5.0;
@@ -1224,7 +1305,7 @@
 				CURRENT_PROJECT_VERSION = 271;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"boringNotch/Preview Content\"";
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 8894S769QD;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -1278,7 +1359,7 @@
 				CURRENT_PROJECT_VERSION = 271;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"boringNotch/Preview Content\"";
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 8894S769QD;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				FRAMEWORK_SEARCH_PATHS = (

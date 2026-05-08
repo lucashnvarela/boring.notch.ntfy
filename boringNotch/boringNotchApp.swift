@@ -57,6 +57,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     let vm: BoringViewModel = .init()
     @ObservedObject var coordinator = BoringViewCoordinator.shared
     var quickShareService = QuickShareService.shared
+    var ntfyManager = NtfyManager.shared
     var whatsNewWindow: NSWindow?
     var timer: Timer?
     var closeNotchTask: Task<Void, Never>?

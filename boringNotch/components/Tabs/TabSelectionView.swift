@@ -5,6 +5,7 @@
 //  Created by Hugo Persson on 2024-08-25.
 //
 
+import Defaults
 import SwiftUI
 
 struct TabModel: Identifiable {
@@ -12,20 +13,37 @@ struct TabModel: Identifiable {
     let label: String
     let icon: String
     let view: NotchViews
+    let isVisible: Bool
 }
-
-let tabs = [
-    TabModel(label: "Home", icon: "house.fill", view: .home),
-    TabModel(label: "Shelf", icon: "tray.fill", view: .shelf)
-]
 
 struct TabSelectionView: View {
     @ObservedObject var coordinator = BoringViewCoordinator.shared
+    @ObservedObject var ntfyModel = NtfyStateViewModel.shared
+    @StateObject var shelfModel = ShelfStateViewModel.shared
     @Namespace var animation
+    @Default(.boringShelf) var boringShelf
+    @Default(.boringNtfy) var boringNtfy
+
+    private var showNtfy: Bool { boringNtfy && (coordinator.alwaysShowTabs || ntfyModel.unreadCountAll > 0) }
+    private var showShelf: Bool { boringShelf && (coordinator.alwaysShowTabs || !shelfModel.isEmpty) }
+
+    private var tabs: [TabModel] {
+        [
+            TabModel(label: "Home", icon: "house.fill", view: .home, isVisible: showNtfy || showShelf),
+            TabModel(label: "Ntfy", icon: "text.bubble.fill", view: .ntfy, isVisible: showNtfy),
+            TabModel(label: "Shelf", icon: "tray.fill", view: .shelf, isVisible: showShelf)
+        ]
+    }
     var body: some View {
         HStack(spacing: 0) {
             ForEach(tabs) { tab in
-                    TabButton(label: tab.label, icon: tab.icon, selected: coordinator.currentView == tab.view) {
+                if tab.isVisible {
+                    TabButton(
+                        label: tab.label,
+                        icon: tab.icon,
+                        selected: coordinator.currentView == tab.view,
+                        showDot: tab.view == .ntfy && ntfyModel.unreadCountAll > 0
+                    ) {
                         withAnimation(.smooth) {
                             coordinator.currentView = tab.view
                         }
@@ -44,6 +62,7 @@ struct TabSelectionView: View {
                                 .hidden()
                         }
                     }
+                }
             }
         }
         .clipShape(Capsule())

@@ -7,7 +7,7 @@
 
 import Foundation
 
-final class WebSocketClient {
+final class WebSocketClient: NSObject {
     enum ConnectionState: Equatable {
         case disconnected
         case connecting
@@ -15,15 +15,16 @@ final class WebSocketClient {
         case failed(String)
     }
 
-    private let session: URLSession
-    private var socketTask: Task<Void, Never>?
-    private var connectionState: ConnectionState?
+    private var session: URLSession!
+    private var socketTask: URLSessionWebSocketTask?
+    private var listenerTask: Task<Void, Never>?
 
     var onStateChange: ((ConnectionState) -> Void)?
     var onMessage: ((Result<String, Error>) -> Void)?
 
-    init() {
-        self.session = URLSession(configuration: .default)
+    override init() {
+        super.init()
+        self.session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
     }
 
     deinit {
@@ -31,58 +32,52 @@ final class WebSocketClient {
     }
 
     func connect(with request: URLRequest) {
-        socketTask?.cancel()
+        listenerTask?.cancel()
+        listenerTask = nil
+        
+        socketTask?.cancel(with: .normalClosure, reason: nil)
+        socketTask = session.webSocketTask(with: request)
+        
         updateState(.connecting)
-        socketTask = Task { [weak self] in
-            await self?.startConnection(with: request)
-        }
+        socketTask?.resume()
     }
 
     func disconnect() {
-        socketTask?.cancel()
+        listenerTask?.cancel()
+        listenerTask = nil
+        
+        socketTask?.cancel(with: .normalClosure, reason: nil)
         socketTask = nil
-        updateState(.disconnected)
     }
 
-    private func startConnection(with request: URLRequest) async {
-        let webSocketTask = session.webSocketTask(with: request)
-
-        await withTaskCancellationHandler {
-            webSocketTask.resume()
-
-            updateState(.connected)
-
-            while !Task.isCancelled {
-                do {
-                    let message = try await webSocketTask.receive()
-
-                    switch message {
-                    case let .string(text):
-                        forwardMessage(.success(text))
-                    case let .data(data):
-                        if let text = String(data: data, encoding: .utf8) {
-                            forwardMessage(.success(text))
-                        }
-                    @unknown default:
-                        break
-                    }
-                } catch {
-                    guard !Task.isCancelled else { return }
-                    
-                    updateState(.failed("\(error)"))
-                    NSLog("\(error)")
-
-                    webSocketTask.cancel(with: .abnormalClosure, reason: nil)
-                    return
+    private func receiveMessages() async {
+        guard let task = socketTask else { return }
+        
+        while !Task.isCancelled {
+            do {
+                let message = try await task.receive()
+                switch message {
+                case let .string(text):
+                    forwardMessage(.success(text))
+                case let .data(data):
+                    guard let text = String(data: data, encoding: .utf8) else { return }
+                    forwardMessage(.success(text))
+                @unknown default:
+                    break
                 }
+            } catch {
+                guard !Task.isCancelled else { return }
+                
+                updateState(.failed("\(error)"))
+                NSLog("\(error)")
+                
+                task.cancel(with: .abnormalClosure, reason: nil)
+                return
             }
-        } onCancel: {
-            webSocketTask.cancel(with: .normalClosure, reason: nil)
         }
     }
 
     private func updateState(_ newState: ConnectionState) {
-        connectionState = newState
         let callback = onStateChange
         DispatchQueue.main.async { callback?(newState) }
     }
@@ -90,5 +85,20 @@ final class WebSocketClient {
     private func forwardMessage(_ result: Result<String, Error>) {
         let callback = onMessage
         DispatchQueue.main.async { callback?(result) }
+    }
+}
+
+extension WebSocketClient: URLSessionWebSocketDelegate {
+    func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocol: String?) {
+        updateState(.connected)
+        listenerTask = Task { [weak self] in
+            await self?.receiveMessages()
+        }
+    }
+
+    func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
+        listenerTask?.cancel()
+        listenerTask = nil
+        updateState(.disconnected)
     }
 }

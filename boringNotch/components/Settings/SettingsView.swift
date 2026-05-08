@@ -152,7 +152,7 @@ struct GeneralSettings: View {
     @Default(.automaticallySwitchDisplay) var automaticallySwitchDisplay
     @Default(.enableGestures) var enableGestures
     @Default(.openNotchOnHover) var openNotchOnHover
-
+    
 
     var body: some View {
         Form {
@@ -184,7 +184,7 @@ struct GeneralSettings: View {
                     }
                 }
                 .disabled(showOnAllDisplays)
-
+                
                 Defaults.Toggle(key: .automaticallySwitchDisplay) {
                     Text("Automatically switch displays")
                 }
@@ -475,7 +475,7 @@ struct HUD: View {
     @Default(.hudReplacement) var hudReplacement
     @ObservedObject var coordinator = BoringViewCoordinator.shared
     @State private var accessibilityAuthorized = false
-
+    
     var body: some View {
         Form {
             Section {
@@ -495,7 +495,7 @@ struct HUD: View {
                     .controlSize(.large)
                     .disabled(!accessibilityAuthorized)
                 }
-
+                
                 if !accessibilityAuthorized {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Accessibility access is required to replace the system HUD.")
@@ -512,14 +512,14 @@ struct HUD: View {
                     .padding(.top, 6)
                 }
             }
-
+            
             Section {
                 Picker("Option key behaviour", selection: $optionKeyAction) {
                     ForEach(OptionKeyAction.allCases) { opt in
                         Text(opt.rawValue).tag(opt)
                     }
                 }
-
+                
                 Picker("Progress bar style", selection: $enableGradient) {
                     Text("Hierarchical")
                         .tag(false)
@@ -536,7 +536,7 @@ struct HUD: View {
                 Text("General")
             }
             .disabled(!hudReplacement)
-
+            
             Section {
                 Defaults.Toggle(key: .showOpenNotchHUD) {
                     Text("Show HUD in open notch")
@@ -552,7 +552,7 @@ struct HUD: View {
                 }
             }
             .disabled(!hudReplacement)
-
+            
             Section {
                 Picker("HUD style", selection: $inlineHUD) {
                     Text("Default")
@@ -568,7 +568,7 @@ struct HUD: View {
                         }
                     }
                 }
-
+                
                 Defaults.Toggle(key: .showClosedNotchHUDPercentage) {
                     Text("Show percentage")
                 }
@@ -643,7 +643,7 @@ struct Media: View {
                     .font(.caption)
                 }
             }
-
+            
             Section {
                 Toggle(
                     "Show music live activity",
@@ -681,7 +681,7 @@ struct Media: View {
             } header: {
                 Text("Media playback live activity")
             }
-
+            
             Section {
                 MusicSlotConfigurationView()
                 Defaults.Toggle(key: .enableLyrics) {

@@ -47,10 +47,6 @@ final class NtfyStateViewModel: ObservableObject {
         topics.flatMap(\.messages).max(by: { $0.time < $1.time })
     }
 
-    func latestMessage(from topic: String) -> NtfyMessage? {
-        topics.first(where: { $0.name == topic })?.messages.first
-    }
-
     func messages(from topic: String?) -> [NtfyMessage] {
         guard let topic else { return topics.filter { $0.isConnected }.flatMap(\.messages).sorted { $0.time > $1.time } }
         return topics.first(where: { $0.name == topic })?.messages ?? []

@@ -20,6 +20,7 @@ struct ContentView: View {
 
     @ObservedObject var coordinator = BoringViewCoordinator.shared
     @ObservedObject var musicManager = MusicManager.shared
+    @ObservedObject var ntfyModel = NtfyStateViewModel.shared
     @ObservedObject var batteryModel = BatteryStatusViewModel.shared
     @ObservedObject var brightnessManager = BrightnessManager.shared
     @ObservedObject var volumeManager = VolumeManager.shared
@@ -284,7 +285,7 @@ struct ContentView: View {
                             .frame(width: 76, alignment: .trailing)
                         }
                         .frame(height: vm.effectiveClosedNotchHeight, alignment: .center)
-                      } else if coordinator.sneakPeek.show && Defaults[.inlineHUD] && (coordinator.sneakPeek.type != .music) && (coordinator.sneakPeek.type != .battery) && vm.notchState == .closed {
+                      } else if coordinator.sneakPeek.show && Defaults[.inlineHUD] && (coordinator.sneakPeek.type != .music) && (coordinator.sneakPeek.type != .ntfy) && (coordinator.sneakPeek.type != .battery) && vm.notchState == .closed {
                           InlineHUD(type: $coordinator.sneakPeek.type, value: $coordinator.sneakPeek.value, icon: $coordinator.sneakPeek.icon, hoverAnimation: $isHovering, gestureProgress: $gestureProgress)
                               .transition(.opacity)
                       } else if (!coordinator.expandingView.show || coordinator.expandingView.type == .music) && vm.notchState == .closed && (musicManager.isPlaying || !musicManager.isPlayerIdle) && coordinator.musicLiveActivityEnabled && !vm.hideOnClosed {
@@ -301,7 +302,7 @@ struct ContentView: View {
                        }
 
                       if coordinator.sneakPeek.show {
-                          if (coordinator.sneakPeek.type != .music) && (coordinator.sneakPeek.type != .battery) && !Defaults[.inlineHUD] && vm.notchState == .closed {
+                          if (coordinator.sneakPeek.type != .music) && (coordinator.sneakPeek.type != .ntfy) && (coordinator.sneakPeek.type != .battery) && !Defaults[.inlineHUD] && vm.notchState == .closed {
                               SystemEventIndicatorModifier(
                                   eventType: $coordinator.sneakPeek.type,
                                   value: $coordinator.sneakPeek.value,
@@ -326,12 +327,36 @@ struct ContentView: View {
                               if vm.notchState == .closed && !vm.hideOnClosed && Defaults[.sneakPeekStyles] == .standard {
                                   HStack(alignment: .center) {
                                       Image(systemName: "music.note")
+                                          .padding(.vertical, 1)
                                       GeometryReader { geo in
                                           MarqueeText(.constant(musicManager.songTitle + " - " + musicManager.artistName),  textColor: Defaults[.playerColorTinting] ? Color(nsColor: musicManager.avgColor).ensureMinimumBrightness(factor: 0.6) : .gray, minDuration: 1, frameWidth: geo.size.width)
                                       }
                                   }
                                   .foregroundStyle(.gray)
                                   .padding(.bottom, 10)
+                              }
+                          }
+                          else if coordinator.sneakPeek.type == .ntfy {
+                              if vm.notchState == .closed && !vm.hideOnClosed {
+                                  if let latestMessage = ntfyModel.latestMessage {
+                                      HStack(alignment: .center) {
+                                          Image(systemName: "antenna.radiowaves.left.and.right")
+                                              .padding(.vertical, 1)
+                                          GeometryReader { geo in
+                                              MarqueeText(
+                                                .constant("New message on \(latestMessage.topic)"),
+                                                textColor: .gray, minDuration: 1, frameWidth: geo.size.width
+                                              )
+                                          }
+                                          Spacer()
+                                          Circle()
+                                              .fill(latestMessage.priority.color)
+                                              .frame(width: 6, height: 6)
+                                              .padding(.horizontal, 1)
+                                      }
+                                      .foregroundStyle(.gray)
+                                      .padding(.bottom, 10)
+                                  }
                               }
                           }
                       }
@@ -349,6 +374,8 @@ struct ContentView: View {
                         NotchHomeView(albumArtNamespace: albumArtNamespace)
                     case .shelf:
                         ShelfView()
+                    case .ntfy:
+                        NtfyView()
                     }
                 }
                 .transition(

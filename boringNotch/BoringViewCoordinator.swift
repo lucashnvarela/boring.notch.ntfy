@@ -15,6 +15,7 @@ enum SneakContentType {
     case volume
     case backlight
     case music
+    case ntfy
     case mic
     case battery
     case download
@@ -210,7 +211,7 @@ class BoringViewCoordinator: ObservableObject {
         icon: String = ""
     ) {
         sneakPeekDuration = duration
-        if type != .music {
+        if type != .music && type != .ntfy {
             // close()
             if !Defaults[.hudReplacement] {
                 return
@@ -242,7 +243,7 @@ class BoringViewCoordinator: ObservableObject {
             guard let self = self, !Task.isCancelled else { return }
             await MainActor.run {
                 withAnimation {
-                    self.toggleSneakPeek(status: false, type: .music)
+                    self.toggleSneakPeek(status: false, type: self.sneakPeek.type)
                     self.sneakPeekDuration = 1.5
                 }
             }

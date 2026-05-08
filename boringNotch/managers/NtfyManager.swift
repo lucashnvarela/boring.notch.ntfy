@@ -56,7 +56,7 @@ final class NtfyManager: ObservableObject {
             forName: NSWorkspace.willSleepNotification, object: nil, queue: nil
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.suspendSession()
+                self?.stopSession()
             }
         }
 
@@ -72,32 +72,27 @@ final class NtfyManager: ObservableObject {
     private func stopSession() {
         sessionInitTask?.cancel()
         sessionInitTask = nil
-        authState = .disconnected
-        tvm.unsubscribeAll()
-    }
 
-    private func suspendSession() {
-        sessionInitTask?.cancel()
-        sessionInitTask = nil
         authState = .disconnected
-        tvm.topics.forEach {
-            disconnect(from: $0.name)
-        }
+
+        tvm.topics.forEach { disconnect(from: $0.name) }
     }
 
     private func startSession() {
         guard Defaults[.boringNtfy] else { return }
+
         sessionInitTask?.cancel()
         sessionInitTask = Task { @MainActor [weak self] in
             await self?.loadSubscriptions()
-            self?.tvm.topics.forEach {
-                self?.connect(to: $0.name)
-            }
+
+            guard !Task.isCancelled else { return }
+            self?.tvm.topics.forEach { self?.connect(to: $0.name) }
         }
     }
 
     func restartSession() {
         stopSession()
+        tvm.unsubscribeAll()
         startSession()
     }
 
@@ -109,12 +104,15 @@ final class NtfyManager: ObservableObject {
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard !Task.isCancelled else { return }
             guard let statusCode = (response as? HTTPURLResponse)?.statusCode else { return }
 
             switch statusCode {
             case 200:
                 authState = .authenticated
                 let account = try JSONDecoder().decode(NtfyAccount.self, from: data)
+                
                 guard let topics = account.subscriptions else { return }
                 topics.forEach { tvm.subscribe(to: $0) }
             case 401, 403:
@@ -126,6 +124,7 @@ final class NtfyManager: ObservableObject {
             }
         } catch {
             guard !Task.isCancelled else { return }
+            
             authState = .failed("Could not connect to the server")
             NSLog("\(error)")
         }
@@ -183,13 +182,13 @@ final class NtfyManager: ObservableObject {
 
     private func syncMessages(for topic: String) async {
         guard case .authenticated = authState else { return }
-        let lastestMessageID = tvm.latestMessage(from: topic)?.id
+        let lastestMessageID = tvm.messages(from: topic).first?.id
         guard let request = makeSyncMessagesRequest(for: topic, since: lastestMessageID ?? "12h") else { return }
 
         do {
             let (bytes, _) = try await URLSession.shared.bytes(for: request)
             for try await text in bytes.lines {
-                guard !text.isEmpty else { return }
+                guard !text.isEmpty else { continue }
                 handleResponse(Data(text.utf8))
             }
         } catch {

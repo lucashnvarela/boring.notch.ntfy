@@ -72,7 +72,6 @@ final class WebSocketClient: NSObject {
                 NSLog("\(error)")
                 
                 task.cancel(with: .abnormalClosure, reason: nil)
-                return
             }
         }
     }

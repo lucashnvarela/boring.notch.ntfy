@@ -338,19 +338,16 @@ struct ContentView: View {
                           }
                           else if coordinator.sneakPeek.type == .ntfy {
                               if vm.notchState == .closed && !vm.hideOnClosed {
-                                  if let latestMessage = ntfyModel.latestMessage {
+                                  if let (label, priority) = ntfyModel.sneakPeekContent {
                                       HStack(alignment: .center) {
                                           Image(systemName: "antenna.radiowaves.left.and.right")
                                               .padding(.vertical, 1)
                                           GeometryReader { geo in
-                                              MarqueeText(
-                                                .constant("New message on \(latestMessage.topic)"),
-                                                textColor: .gray, minDuration: 1, frameWidth: geo.size.width
-                                              )
+                                              MarqueeText(.constant(label), textColor: .gray, minDuration: 1, frameWidth: geo.size.width)
                                           }
                                           Spacer()
                                           Circle()
-                                              .fill(latestMessage.priority.color)
+                                              .fill(priority.color)
                                               .frame(width: 6, height: 6)
                                               .padding(.horizontal, 1)
                                       }

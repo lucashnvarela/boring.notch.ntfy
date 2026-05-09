@@ -30,14 +30,19 @@ final class NtfyManager: ObservableObject {
     @Published private(set) var authState: SessionState = .disconnected
 
     private let tvm = NtfyStateViewModel.shared
+    private let coordinator = BoringViewCoordinator.shared
     private var webSocketConnections: [String: WebSocketClient] = [:]
     private var syncMessagesTasks: [String: Task<Void, Never>] = [:]
     private var sessionInitTask: Task<Void, Never>?
+    private var messagesQueue: [NtfyMessage] = []
+    private let flushSignal = PassthroughSubject<Void, Never>()
+    private var flushQueueTask: Task<Void, Never>?
     private var cancellables: Set<AnyCancellable> = []
 
     private init() {
         setupSettingsObserver()
         setupSystemStateObservers()
+        setupQueueFlushDebounce()
     }
 
     private func setupSettingsObserver() {
@@ -68,8 +73,45 @@ final class NtfyManager: ObservableObject {
             }
         }
     }
+    
+    private func setupQueueFlushDebounce() {
+        flushSignal
+            .debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)
+            .sink { [weak self] in
+                Task { @MainActor [weak self] in
+                    guard case nil = self?.flushQueueTask else { return }
+                    
+                    self?.flushQueueTask = Task { @MainActor [weak self] in
+                        defer {
+                            self?.flushQueueTask = nil
+                            self?.tvm.resetBatch()
+                        }
+                        await self?.flushMessagesQueue()
+                    }
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    private func flushMessagesQueue() async {
+        while !Task.isCancelled, !messagesQueue.isEmpty {
+            guard let topic = messagesQueue.first?.topic else { break }
+            let batch = messagesQueue.filter { $0.topic == topic }
+
+            tvm.commitBatch(batch)
+            messagesQueue.removeAll { $0.topic == topic }
+
+            if Defaults[.ntfyEnableSneakPeek] { await showSneakPeek() }
+        }
+    }
 
     private func stopSession() {
+        flushQueueTask?.cancel()
+        flushQueueTask = nil
+
+        messagesQueue.removeAll()
+        tvm.resetBatch()
+
         sessionInitTask?.cancel()
         sessionInitTask = nil
 
@@ -96,6 +138,33 @@ final class NtfyManager: ObservableObject {
         startSession()
     }
 
+    private func showSneakPeek() async {
+        defer { coordinator.toggleSneakPeek(status: false, type: .ntfy) }
+        
+        for await sneakPeek in coordinator.$sneakPeek.values {
+            guard !Task.isCancelled else { return }
+            if !sneakPeek.show { break }
+        }
+
+        try? await Task.sleep(for: .milliseconds(500))
+        guard !Task.isCancelled else { return }
+
+        AudioPlayer().play(fileName: "ding", fileExtension: "mp3")
+        coordinator.toggleSneakPeek(status: true, type: .ntfy, duration: 3)
+        
+        var didSeeNtfySneakPeek = false
+        for await sneakPeek in coordinator.$sneakPeek.values {
+            guard !Task.isCancelled else { return }
+            if !didSeeNtfySneakPeek {
+                if sneakPeek.show && sneakPeek.type == .ntfy {
+                    didSeeNtfySneakPeek = true
+                }
+            } else if !sneakPeek.show {
+                break
+            }
+        }
+    }
+    
     private func loadSubscriptions() async {
         guard let request = makeLoadSubscriptionsRequest() else {
             authState = .failed("Could not make the HTTP request")
@@ -124,7 +193,6 @@ final class NtfyManager: ObservableObject {
             }
         } catch {
             guard !Task.isCancelled else { return }
-            
             authState = .failed("Could not connect to the server")
             NSLog("\(error)")
         }
@@ -200,12 +268,9 @@ final class NtfyManager: ObservableObject {
     private func handleResponse(_ data: Data) {
         guard let message = try? JSONDecoder().decode(NtfyMessage.self, from: data) else { return }
         guard message.event == .message else { return }
-
-        tvm.insertMessage(message)
-
-        if Defaults[.ntfyEnableSneakPeek] {
-            BoringViewCoordinator.shared.toggleSneakPeek(status: true, type: .ntfy, duration: message.priority.rawValue > 3 ? 5 : 3)
-        }
+        
+        messagesQueue.append(message)
+        flushSignal.send()
     }
 
     private func makeAuthHeaders(auth: NtfyAuthConfig) -> [String: String] {

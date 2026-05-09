@@ -59,7 +59,7 @@ struct NtfyMessage: Identifiable, Codable, Equatable {
     let time: Date
     let priority: NtfyMessagePriority
     let event: NtfyMessageEvent
-    var isRead: Bool = false
+    var isRead: Bool
 
     enum CodingKeys: String, CodingKey {
         case id, topic, title, time, priority, event
@@ -77,5 +77,6 @@ struct NtfyMessage: Identifiable, Codable, Equatable {
         time = Date(timeIntervalSince1970: try c.decode(TimeInterval.self, forKey: .time))
         priority = try c.decodeIfPresent(NtfyMessagePriority.self, forKey: .priority) ?? .low
         event = try c.decode(NtfyMessageEvent.self, forKey: .event)
+        isRead = false
     }
 }

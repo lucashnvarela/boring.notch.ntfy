@@ -29,7 +29,6 @@ struct NtfyTopic: Identifiable, Codable, Equatable {
         messages = []
     }
 
-
     var unreadCount: Int {
         messages.filter { !$0.isRead }.count
     }

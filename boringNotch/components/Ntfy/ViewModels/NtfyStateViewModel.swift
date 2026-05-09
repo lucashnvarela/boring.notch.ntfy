@@ -12,6 +12,7 @@ final class NtfyStateViewModel: ObservableObject {
     static let shared = NtfyStateViewModel()
 
     @Published private(set) var topics: [NtfyTopic] = []
+    @Published private(set) var lastMessagesBatch: [NtfyMessage]?
 
     private init() {}
 
@@ -25,17 +26,35 @@ final class NtfyStateViewModel: ObservableObject {
     }
 
     func updateConnectionState(_ newState: WebSocketClient.ConnectionState, for topic: String) {
-        guard let id = topics.firstIndex(where: { $0.name == topic }) else { return }
-        topics[id].connectionState = newState
+        guard let idx = topics.firstIndex(where: { $0.name == topic }) else { return }
+        topics[idx].connectionState = newState
     }
 
     var connectedCount: Int {
         topics.filter { $0.connectionState == .connected }.count
     }
 
-    func insertMessage(_ message: NtfyMessage) {
-        guard let idx = topics.firstIndex(where: { $0.name == message.topic }) else { return }
-        topics[idx].insertMessage(message)
+    func commitBatch(_ messages: [NtfyMessage]) {
+        lastMessagesBatch = messages
+        for message in messages {
+            guard let idx = topics.firstIndex(where: { $0.name == message.topic }) else { continue }
+            topics[idx].insertMessage(message)
+        }
+    }
+    
+    func resetBatch() {
+        lastMessagesBatch = nil
+    }
+    
+    var sneakPeekContent: (label: String, priority: NtfyMessagePriority)? {
+        guard let messages = lastMessagesBatch, !messages.isEmpty else { return nil }
+        
+        guard let priority = messages.map(\.priority).max(by: { $0.rawValue < $1.rawValue }) else { return nil }
+        
+        guard let topic = topics.first(where: { $0.name == messages.first?.topic }) else { return nil }
+        let label = "New \(messages.count > 1 ? "messages" : "message") on \(topic.displayName ?? topic.name)"
+        
+        return (label, priority)
     }
 
     func markRead(_ message: NtfyMessage) {

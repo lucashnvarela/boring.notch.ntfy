@@ -20,28 +20,27 @@ struct NtfyTopic: Identifiable, Codable, Equatable {
 
     var id: String { name }
     var isConnected: Bool { connectionState == .connected }
+    var isDisabled: Bool { connectionState == .disabled }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         name = try c.decode(String.self, forKey: .name)
         displayName = try c.decodeIfPresent(String.self, forKey: .displayName)
-        connectionState = .disconnected
+        connectionState = .disabled
         messages = []
     }
 
     var unreadCount: Int {
-        messages.filter { !$0.isRead }.count
+        messages.filter({ !$0.isRead }).count
     }
 
     mutating func insertMessage(_ message: NtfyMessage) {
         guard !messages.contains(where: { $0.id == message.id }) else { return }
 
-        let insertAt = messages.firstIndex { $0.time < message.time } ?? messages.count
+        let insertAt = messages.firstIndex(where: { $0.time < message.time }) ?? messages.count
         messages.insert(message, at: insertAt)
 
-        if messages.count > 50 {
-            messages.removeLast()
-        }
+        if messages.count > 50 { messages.removeLast() }
     }
 
     mutating func markRead(_ message: NtfyMessage) {

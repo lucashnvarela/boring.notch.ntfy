@@ -117,6 +117,7 @@
 		66772C772FAE56910090306E /* ding.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 66772C762FAE56910090306E /* ding.mp3 */; };
 		66C7C4382F9CEE4C00F11857 /* NtfyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66C7C4362F9CEE4C00F11857 /* NtfyManager.swift */; };
 		66C7C4392F9CEE4C00F11857 /* WebSocketClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66C7C4372F9CEE4C00F11857 /* WebSocketClient.swift */; };
+		66C7C43B2F9D000100F11857 /* Network.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 66C7C43A2F9D000100F11857 /* Network.framework */; };
 		9A0887322C7A693000C160EA /* TabButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A0887312C7A693000C160EA /* TabButton.swift */; };
 		9A0887352C7AFF8E00C160EA /* TabSelectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A0887342C7AFF8E00C160EA /* TabSelectionView.swift */; };
 		9A987A0D2C73CA66005CA465 /* ShelfView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A987A032C73CA66005CA465 /* ShelfView.swift */; };
@@ -294,6 +295,7 @@
 		66772C762FAE56910090306E /* ding.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = ding.mp3; sourceTree = "<group>"; };
 		66C7C4362F9CEE4C00F11857 /* NtfyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NtfyManager.swift; sourceTree = "<group>"; };
 		66C7C4372F9CEE4C00F11857 /* WebSocketClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketClient.swift; sourceTree = "<group>"; };
+		66C7C43A2F9D000100F11857 /* Network.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Network.framework; path = System/Library/Frameworks/Network.framework; sourceTree = SDKROOT; };
 		9A0887312C7A693000C160EA /* TabButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabButton.swift; sourceTree = "<group>"; };
 		9A0887342C7AFF8E00C160EA /* TabSelectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabSelectionView.swift; sourceTree = "<group>"; };
 		9A987A032C73CA66005CA465 /* ShelfView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ShelfView.swift; sourceTree = "<group>"; };
@@ -356,6 +358,7 @@
 				9A987A102C73CA8D005CA465 /* Collections in Frameworks */,
 				1194E8852EA57D23009C82D6 /* SkyLightWindow in Frameworks */,
 				112B0EBB2E30DD5000562D6C /* MediaRemoteAdapter.framework in Frameworks */,
+				66C7C43B2F9D000100F11857 /* Network.framework in Frameworks */,
 				14D0321D2C68F3350096E6A1 /* Sparkle in Frameworks */,
 				111BEA6F2ED166E20079DD4E /* MacroVisionKit in Frameworks */,
 				11F748732EC9DA9300F841DB /* Lottie in Frameworks */,
@@ -619,6 +622,7 @@
 			children = (
 				14D031EF2C689DC00096E6A1 /* ApplicationServices.framework */,
 				14D031ED2C689DB70096E6A1 /* IOKit.framework */,
+				66C7C43A2F9D000100F11857 /* Network.framework */,
 				112B0EBA2E30DD5000562D6C /* MediaRemoteAdapter.framework */,
 			);
 			name = Frameworks;

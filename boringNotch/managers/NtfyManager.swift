@@ -8,6 +8,7 @@
 import Combine
 import Defaults
 import Foundation
+import Network
 import SwiftUI
 
 private struct NtfyAccount: Decodable {
@@ -18,8 +19,7 @@ private struct NtfyAccount: Decodable {
 
 @MainActor
 final class NtfyManager: ObservableObject {
-    enum SessionState {
-        case disconnected
+    enum AuthenticationState: Equatable {
         case unauthorized
         case authenticated
         case failed(String)
@@ -27,13 +27,17 @@ final class NtfyManager: ObservableObject {
 
     static let shared = NtfyManager()
 
-    @Published private(set) var authState: SessionState = .disconnected
+    @Published private(set) var networkStatus: NWPath.Status?
+    @Published private(set) var authState: AuthenticationState?
 
-    private let tvm = NtfyStateViewModel.shared
+    private let viewModel = NtfyStateViewModel.shared
     private let coordinator = BoringViewCoordinator.shared
-    private var webSocketConnections: [String: WebSocketClient] = [:]
+    private let workspace = NSWorkspace.shared
+    private let networkMonitor = NWPathMonitor()
+    private var resumeConnectionsWorkItem: DispatchWorkItem?
+    private var sessionAuthTask: Task<Void, Never>?
+    private var webSockets: [String: WebSocketClient] = [:]
     private var syncMessagesTasks: [String: Task<Void, Never>] = [:]
-    private var sessionInitTask: Task<Void, Never>?
     private var messagesQueue: [NtfyMessage] = []
     private let flushSignal = PassthroughSubject<Void, Never>()
     private var flushQueueTask: Task<Void, Never>?
@@ -42,7 +46,7 @@ final class NtfyManager: ObservableObject {
     private init() {
         setupSettingsObserver()
         setupSystemStateObservers()
-        setupQueueFlushDebounce()
+        setupMessagesQueue()
     }
 
     private func setupSettingsObserver() {
@@ -50,31 +54,47 @@ final class NtfyManager: ObservableObject {
             .debounce(for: .milliseconds(150), scheduler: DispatchQueue.main)
             .sink { [weak self] state in
                 Task { @MainActor [weak self] in
-                    state.newValue ? self?.startSession() : self?.stopSession()
+                    state.newValue ? self?.resumeConnections() : self?.suspendConnections()
                 }
             }
             .store(in: &cancellables)
     }
 
     private func setupSystemStateObservers() {
-        NSWorkspace.shared.notificationCenter.addObserver(
+        workspace.notificationCenter.addObserver(
             forName: NSWorkspace.willSleepNotification, object: nil, queue: nil
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.stopSession()
+                self?.suspendConnections()
             }
         }
 
-        NSWorkspace.shared.notificationCenter.addObserver(
+        workspace.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification, object: nil, queue: nil
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.startSession()
+                try? await Task.sleep(for: .seconds(5))
+                self?.resumeConnections()
             }
         }
+        
+        networkMonitor.pathUpdateHandler = { [weak self] path in
+            Task { @MainActor in
+                self?.networkStatus = path.status
+                
+                switch path.status {
+                case .satisfied:
+                    try? await Task.sleep(for: .seconds(5))
+                    self?.resumeConnections()
+                default:
+                    self?.suspendConnections()
+                }
+            }
+        }
+        networkMonitor.start(queue: DispatchQueue.main)
     }
     
-    private func setupQueueFlushDebounce() {
+    private func setupMessagesQueue() {
         flushSignal
             .debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)
             .sink { [weak self] in
@@ -82,60 +102,54 @@ final class NtfyManager: ObservableObject {
                     guard case nil = self?.flushQueueTask else { return }
                     
                     self?.flushQueueTask = Task { @MainActor [weak self] in
-                        defer {
-                            self?.flushQueueTask = nil
-                            self?.tvm.resetBatch()
-                        }
-                        await self?.flushMessagesQueue()
+                        defer { self?.flushQueueTask = nil }
+                        await self?.flushQueue()
                     }
                 }
             }
             .store(in: &cancellables)
     }
+    
+    private func cancelMessagesQueue() {
+        flushQueueTask?.cancel()
+        flushQueueTask = nil
 
-    private func flushMessagesQueue() async {
+        messagesQueue.removeAll()
+        viewModel.resetBatch()
+    }
+
+    private func flushQueue() async {
         while !Task.isCancelled, !messagesQueue.isEmpty {
+            defer { viewModel.resetBatch() }
+            
             guard let topic = messagesQueue.first?.topic else { break }
             let batch = messagesQueue.filter { $0.topic == topic }
 
-            tvm.commitBatch(batch)
+            viewModel.commitBatch(batch)
             messagesQueue.removeAll { $0.topic == topic }
 
             if Defaults[.ntfyEnableSneakPeek] { await showSneakPeek() }
         }
     }
 
-    private func stopSession() {
-        flushQueueTask?.cancel()
-        flushQueueTask = nil
-
-        messagesQueue.removeAll()
-        tvm.resetBatch()
-
-        sessionInitTask?.cancel()
-        sessionInitTask = nil
-
-        authState = .disconnected
-
-        tvm.topics.forEach { disconnect(from: $0.name) }
+    private func cancelAuthSession() {
+        sessionAuthTask?.cancel()
+        sessionAuthTask = nil
     }
 
-    private func startSession() {
-        guard Defaults[.boringNtfy] else { return }
-
-        sessionInitTask?.cancel()
-        sessionInitTask = Task { @MainActor [weak self] in
+    private func startAuthSession() {
+        sessionAuthTask?.cancel()
+        sessionAuthTask = Task { @MainActor [weak self] in
             await self?.loadSubscriptions()
-
-            guard !Task.isCancelled else { return }
-            self?.tvm.topics.forEach { self?.connect(to: $0.name) }
         }
     }
 
     func restartSession() {
-        stopSession()
-        tvm.unsubscribeAll()
-        startSession()
+        cancelAuthSession()
+        suspendConnections()
+        cancelMessagesQueue()
+        viewModel.unsubscribeAll()
+        startAuthSession()
     }
 
     private func showSneakPeek() async {
@@ -166,8 +180,13 @@ final class NtfyManager: ObservableObject {
     }
     
     private func loadSubscriptions() async {
+        guard case .satisfied = networkStatus else {
+            authState = .failed("Could not connect to the server.")
+            return
+        }
+        
         guard let request = makeLoadSubscriptionsRequest() else {
-            authState = .failed("Could not make the HTTP request")
+            authState = .failed("Could not make the request.")
             return
         }
 
@@ -183,43 +202,85 @@ final class NtfyManager: ObservableObject {
                 let account = try JSONDecoder().decode(NtfyAccount.self, from: data)
                 
                 guard let topics = account.subscriptions else { return }
-                topics.forEach { tvm.subscribe(to: $0) }
+                topics.forEach { viewModel.subscribe(to: $0) }
             case 401, 403:
                 authState = .unauthorized
-                return
             default:
-                authState = .failed("Could not connect to the server")
-                return
+                authState = .failed("Could not connect to the server.")
             }
         } catch {
             guard !Task.isCancelled else { return }
-            authState = .failed("Could not connect to the server")
-            NSLog("\(error)")
+            
+            authState = .failed(error.localizedDescription)
+            NSLog("managers.NtfyManager.loadSubscriptions: \(error)")
         }
+    }
+    
+    private func suspendConnections() {
+        resumeConnectionsWorkItem?.cancel()
+        resumeConnectionsWorkItem = nil
+        
+        viewModel.topics.forEach {
+            switch $0.connectionState {
+            case .connected, .connecting:
+                disconnect(from: $0.id)
+            default:
+                return
+            }
+        }
+    }
+    
+    private func resumeConnections() {
+        guard Defaults[.boringNtfy] else { return }
+        
+        resumeConnectionsWorkItem?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard case .satisfied = self?.networkStatus else { return }
+            
+            self?.viewModel.topics.forEach {
+                switch $0.connectionState {
+                case .disconnected, .failed:
+                    self?.connect(to: $0.id)
+                default:
+                    return
+                }
+            }
+        }
+        
+        resumeConnectionsWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(500), execute: work)
+        
     }
 
     func toggleConnection(_ isOn: Bool, for topic: String) {
-        if isOn { connect(to: topic) }
-        else { disconnect(from: topic) }
+        if isOn {
+            viewModel.updateConnectionState(.disconnected, for: topic)
+            connect(to: topic)
+        } else {
+            disconnect(from: topic)
+            viewModel.updateConnectionState(.disabled, for: topic)
+        }
     }
 
     private func disconnect(from topic: String) {
-        webSocketConnections[topic]?.disconnect()
-        webSocketConnections.removeValue(forKey: topic)
+        webSockets[topic]?.disconnect()
+        webSockets.removeValue(forKey: topic)
     }
 
     private func connect(to topic: String) {
-        guard case .authenticated = authState else { return }
+        guard case .satisfied = networkStatus else {
+            viewModel.updateConnectionState(.failed("Could not connect to the server."), for: topic)
+            return
+        }
+        
         guard let request = makeWebSocketRequest(for: topic) else {
-            tvm.updateConnectionState(.failed("Could not make the WebSocket request"), for: topic)
+            viewModel.updateConnectionState(.failed("Could not make the request."), for: topic)
             return
         }
 
         let client = WebSocketClient()
 
         client.onStateChange = { [weak self] newState in
-            self?.tvm.updateConnectionState(newState, for: topic)
-
             switch newState {
             case .connected:
                 self?.syncMessagesTasks[topic]?.cancel()
@@ -229,29 +290,40 @@ final class NtfyManager: ObservableObject {
             case .disconnected, .failed:
                 self?.syncMessagesTasks[topic]?.cancel()
                 self?.syncMessagesTasks.removeValue(forKey: topic)
-            case .connecting:
+                
+                let oldState = self?.viewModel.connectionState(from: topic)
+                switch oldState {
+                case .disabled, .disconnected:
+                    return
+                default:
+                    break
+                }
+            default:
                 break
             }
+            
+            self?.viewModel.updateConnectionState(newState, for: topic)
         }
 
         client.onMessage = { [weak self] result in
             switch result {
-            case let .success(text):
+            case .success(let text):
                 self?.handleResponse(Data(text.utf8))
-            case let .failure(error):
-                self?.tvm.updateConnectionState(.failed("Could not receive the WebSocket message"), for: topic)
-                NSLog("\(error)")
+            case .failure(let error):
+                self?.viewModel.updateConnectionState(.failed(error.localizedDescription), for: topic)
+                NSLog("managers.NtfyManager.connect(to: \(topic)): \(error)")
             }
         }
 
-        webSocketConnections[topic] = client
+        webSockets[topic] = client
         client.connect(with: request)
     }
 
     private func syncMessages(for topic: String) async {
-        guard case .authenticated = authState else { return }
-        let lastestMessageID = tvm.messages(from: topic).first?.id
-        guard let request = makeSyncMessagesRequest(for: topic, since: lastestMessageID ?? "12h") else { return }
+        guard case .satisfied = networkStatus else { return }
+        
+        let latestMessageID = viewModel.messages(from: topic).first?.id
+        guard let request = makeSyncMessagesRequest(for: topic, since: latestMessageID ?? "12h") else { return }
 
         do {
             let (bytes, _) = try await URLSession.shared.bytes(for: request)
@@ -261,7 +333,7 @@ final class NtfyManager: ObservableObject {
             }
         } catch {
             guard !Task.isCancelled else { return }
-            NSLog("\(error)")
+            NSLog("managers.NtfyManager.syncMessages(for: \(topic)): \(error)")
         }
     }
 

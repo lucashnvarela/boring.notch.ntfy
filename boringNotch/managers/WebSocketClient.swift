@@ -9,6 +9,7 @@ import Foundation
 
 final class WebSocketClient: NSObject {
     enum ConnectionState: Equatable {
+        case disabled
         case disconnected
         case connecting
         case connected
@@ -16,7 +17,7 @@ final class WebSocketClient: NSObject {
     }
 
     private var session: URLSession!
-    private var socketTask: URLSessionWebSocketTask?
+    private var webSocketTask: URLSessionWebSocketTask?
     private var listenerTask: Task<Void, Never>?
 
     var onStateChange: ((ConnectionState) -> Void)?
@@ -35,31 +36,34 @@ final class WebSocketClient: NSObject {
         listenerTask?.cancel()
         listenerTask = nil
         
-        socketTask?.cancel(with: .normalClosure, reason: nil)
-        socketTask = session.webSocketTask(with: request)
+        webSocketTask?.cancel(with: .normalClosure, reason: nil)
+        webSocketTask = session.webSocketTask(with: request)
         
         updateState(.connecting)
-        socketTask?.resume()
+        
+        webSocketTask?.resume()
     }
 
     func disconnect() {
         listenerTask?.cancel()
         listenerTask = nil
         
-        socketTask?.cancel(with: .normalClosure, reason: nil)
-        socketTask = nil
+        webSocketTask?.cancel(with: .normalClosure, reason: nil)
+        webSocketTask = nil
+        
+        updateState(.disconnected)
     }
 
     private func receiveMessages() async {
-        guard let task = socketTask else { return }
+        guard let task = webSocketTask else { return }
         
         while !Task.isCancelled {
             do {
                 let message = try await task.receive()
                 switch message {
-                case let .string(text):
+                case .string(let text):
                     forwardMessage(.success(text))
-                case let .data(data):
+                case .data(let data):
                     guard let text = String(data: data, encoding: .utf8) else { return }
                     forwardMessage(.success(text))
                 @unknown default:
@@ -68,10 +72,11 @@ final class WebSocketClient: NSObject {
             } catch {
                 guard !Task.isCancelled else { return }
                 
-                updateState(.failed("\(error)"))
-                NSLog("\(error)")
+                updateState(.failed(error.localizedDescription))
+                NSLog("managers.WebSocketClient.receiveMessages: \(error)")
                 
                 task.cancel(with: .abnormalClosure, reason: nil)
+                return
             }
         }
     }
@@ -99,5 +104,14 @@ extension WebSocketClient: URLSessionWebSocketDelegate {
         listenerTask?.cancel()
         listenerTask = nil
         updateState(.disconnected)
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        listenerTask?.cancel()
+        listenerTask = nil
+        if let error {
+            updateState(.failed(error.localizedDescription))
+            NSLog("managers.WebSocketClient.didCompleteWithError: \(error)")
+        }
     }
 }

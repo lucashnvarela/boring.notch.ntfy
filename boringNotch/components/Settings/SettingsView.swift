@@ -838,7 +838,7 @@ func lighterColor(from nsColor: NSColor, amount: CGFloat = 0.14) -> Color {
 }
 
 struct Ntfy: View {
-    @ObservedObject private var tvm = NtfyStateViewModel.shared
+    @ObservedObject private var viewModel = NtfyStateViewModel.shared
     @ObservedObject private var manager = NtfyManager.shared
     @Default(.boringNtfy) private var boringNtfy
     @Default(.ntfyServerURL) private var ntfyServerURL
@@ -937,19 +937,6 @@ struct Ntfy: View {
                 Text("Authentication")
             } footer: {
                 HStack {
-                    Button("Reconnect") {
-                        switch authMethod {
-                        case .none:
-                            ntfyAuthentication = .none
-                        case .basic:
-                            ntfyAuthentication = .basic(username: authUsername, password: authPassword)
-                        case .token:
-                            ntfyAuthentication = .token(authToken)
-                        }
-                        manager.restartSession()
-                    }
-                    .disabled(!boringNtfy || !isAuthValid)
-                    Spacer()
                     HStack(spacing: 4) {
                         switch manager.authState {
                         case .authenticated:
@@ -965,20 +952,34 @@ struct Ntfy: View {
                         case .failed(let error):
                             Image(systemName: "exclamationmark.circle")
                                 .foregroundStyle(.red)
-                            Text(error)
+                            Text("Failed")
                                 .foregroundStyle(.red)
-                        case .disconnected:
-                            Image(systemName: "xmark.circle")
-                                .foregroundStyle(.secondary)
-                            Text("Disconnected")
-                                .foregroundStyle(.secondary)
+                                .help(error)
+                        default:
+                            EmptyView()
                         }
                     }
                     .font(.callout)
+                    Spacer()
+                    Button {
+                        switch authMethod {
+                        case .none:
+                            ntfyAuthentication = .none
+                        case .basic:
+                            ntfyAuthentication = .basic(username: authUsername, password: authPassword)
+                        case .token:
+                            ntfyAuthentication = .token(authToken)
+                        }
+                        manager.restartSession()
+                    } label: {
+                        Image(systemName: "arrow.counterclockwise")
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .disabled(!boringNtfy || !isAuthValid)
                 }
             }
 
-            if !tvm.topics.isEmpty {
+            if !viewModel.topics.isEmpty {
                 Section {
                     VStack {
                         HStack(spacing: 8) {
@@ -992,12 +993,12 @@ struct Ntfy: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
-                        ForEach(tvm.topics) { topic in
+                        ForEach(viewModel.topics) { topic in
                             Divider()
                             HStack(spacing: 8) {
                                 Text(topic.displayName ?? topic.name)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                    .foregroundStyle(topic.isConnected ? .primary : .tertiary)
+                                    .foregroundStyle(!topic.isDisabled ? .primary : .tertiary)
                                     .lineLimit(1)
                                 Spacer()
                                 HStack(spacing: 4) {
@@ -1011,17 +1012,21 @@ struct Ntfy: View {
                                     case .connecting:
                                         ProgressView()
                                             .controlSize(.small)
-                                    case .failed:
+                                    case .failed(let error):
                                         Image(systemName: "wifi.exclamationmark")
                                             .imageScale(.small)
                                             .foregroundStyle(.red)
                                         Text("Failed")
                                             .foregroundStyle(.red)
+                                            .help(error)
                                     case .disconnected:
                                         Image(systemName: "wifi.slash")
                                             .imageScale(.small)
                                             .foregroundStyle(.tertiary)
                                         Text("Disconnected")
+                                            .foregroundStyle(.tertiary)
+                                    case .disabled:
+                                        Text("-")
                                             .foregroundStyle(.tertiary)
                                     }
                                 }
@@ -1029,11 +1034,11 @@ struct Ntfy: View {
                                 .font(.callout)
                                 Spacer()
                                 Toggle("", isOn: Binding(
-                                    get: { topic.isConnected },
-                                    set: { manager.toggleConnection($0, for: topic.name) }
+                                    get: { !topic.isDisabled },
+                                    set: { manager.toggleConnection($0, for: topic.id) }
                                 ))
                                 .labelsHidden()
-                                .disabled(!boringNtfy)
+                                .disabled(topic.isDisabled && !boringNtfy)
                             }
                             .padding(.vertical, 4)
                         }
